@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider } from './context/AppContextSupabase';
 import BottomNav from './components/BottomNav';
 import TimelineView from './views/TimelineView';
 import DailyTasksView from './views/DailyTasksView';
