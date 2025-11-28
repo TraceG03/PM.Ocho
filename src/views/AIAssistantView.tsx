@@ -261,40 +261,193 @@ When answering questions:
     if (files && files.length > 0) await processFile(files[0]);
   };
 
-  const handleExtractMilestones = () => {
+  const handleExtractMilestones = async () => {
     if (!documentText.trim() && !uploadedFile) {
       alert('Please upload a document or paste text');
       return;
     }
+
     setIsExtracting(true);
-    setTimeout(() => {
-      const datePattern = /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4}/g;
-      const dates = documentText.match(datePattern);
-      if (dates && dates.length >= 2) {
-        addMilestone({
-          title: 'Extracted Milestone',
-          startDate: dates[0],
-          endDate: dates[1],
-          phaseId: phases[0]?.id || '',
-          notes: 'Extracted from document',
-        });
-        alert('Milestone extracted!');
-      } else {
-        const today = new Date();
-        const nextWeek = new Date(today);
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        addMilestone({
-          title: 'Phase 1 - Planning',
-          startDate: today.toISOString().split('T')[0],
-          endDate: nextWeek.toISOString().split('T')[0],
-          phaseId: phases[0]?.id || '',
-          notes: 'Extracted from document',
-        });
-        alert('Milestone extracted!');
+
+    try {
+      let textToAnalyze = documentText;
+
+      // If we have an uploaded file, try to get its content
+      if (uploadedFile && !textToAnalyze.trim()) {
+        const fileData = getFile(uploadedFile);
+        if (fileData && fileData.type === 'text/plain') {
+          try {
+            const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
+            if (base64Match) {
+              textToAnalyze = atob(base64Match[1]);
+            }
+          } catch (e) {
+            console.error('Error reading file:', e);
+          }
+        }
       }
-      setDocumentText('');
+
+      if (!textToAnalyze.trim()) {
+        alert('No text content found to analyze');
+        setIsExtracting(false);
+        return;
+      }
+
+      if (openAIConfigured && openai) {
+        // Use OpenAI to extract milestones
+        const systemPrompt = `You are an AI assistant that extracts project milestones from construction documents, schedules, and timelines.
+
+Your task is to analyze the provided document and extract meaningful milestones with:
+- Clear, descriptive titles (e.g., "Foundation Complete", "Wall Framing", "Roof Installation")
+- Start dates (in YYYY-MM-DD format)
+- End dates (in YYYY-MM-DD format)
+- Brief notes describing the milestone
+
+Return your response as a JSON object with a "milestones" array in this exact format:
+{
+  "milestones": [
+    {
+      "title": "Milestone Name",
+      "startDate": "YYYY-MM-DD",
+      "endDate": "YYYY-MM-DD",
+      "notes": "Brief description"
+    }
+  ]
+}
+
+If you cannot find clear dates or milestones, return: {"milestones": []}
+
+Available phases in the project:
+${phases.map(p => `- ${p.name} (ID: ${p.id})`).join('\n') || 'No phases defined yet'}
+
+Try to match milestones to appropriate phases when possible. Extract dates from the document and convert them to YYYY-MM-DD format.`;
+
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Extract milestones from this document:\n\n${textToAnalyze.substring(0, 8000)}` }
+          ],
+          temperature: 0.3,
+          max_tokens: 1500,
+        });
+
+        const response = completion.choices[0]?.message?.content || '[]';
+        let milestones: any[] = [];
+        
+        try {
+          // Try to parse as JSON directly
+          const parsed = JSON.parse(response);
+          milestones = Array.isArray(parsed) ? parsed : (parsed.milestones || []);
+        } catch (e) {
+          // Try to extract JSON from markdown code blocks
+          const jsonMatch = response.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+          if (jsonMatch) {
+            try {
+              milestones = JSON.parse(jsonMatch[1]);
+            } catch (e2) {
+              // Try to extract JSON object
+              const objMatch = response.match(/\{[\s\S]*"milestones"[\s\S]*\}/);
+              if (objMatch) {
+                const parsed = JSON.parse(objMatch[0]);
+                milestones = parsed.milestones || [];
+              }
+            }
+          } else {
+            // Try to find JSON object in response
+            const objMatch = response.match(/\{[\s\S]*\}/);
+            if (objMatch) {
+              try {
+                const parsed = JSON.parse(objMatch[0]);
+                milestones = parsed.milestones || (Array.isArray(parsed) ? parsed : []);
+              } catch (e3) {
+                console.error('Failed to parse JSON:', e3);
+              }
+            }
+          }
+        }
+
+        if (milestones.length === 0) {
+          alert('No milestones could be extracted from the document. Please ensure the document contains dates and milestone information.');
+          setIsExtracting(false);
+          return;
+        }
+
+        // Create milestones
+        let createdCount = 0;
+        for (const milestone of milestones) {
+          if (milestone.title && milestone.startDate && milestone.endDate) {
+            // Find appropriate phase or use first available
+            let phaseId = phases[0]?.id || '';
+            
+            // Try to match phase by name if milestone notes mention it
+            if (milestone.notes) {
+              const matchingPhase = phases.find(p => 
+                milestone.notes.toLowerCase().includes(p.name.toLowerCase()) ||
+                milestone.title.toLowerCase().includes(p.name.toLowerCase())
+              );
+              if (matchingPhase) {
+                phaseId = matchingPhase.id;
+              }
+            }
+
+            await addMilestone({
+              title: milestone.title,
+              startDate: milestone.startDate,
+              endDate: milestone.endDate,
+              phaseId: phaseId,
+              notes: milestone.notes || 'Extracted by AI from document',
+            });
+            createdCount++;
+          }
+        }
+
+        if (createdCount > 0) {
+          alert(`Successfully extracted ${createdCount} milestone(s) using AI!`);
+          setDocumentText('');
+          setUploadedFile(null);
+        } else {
+          alert('AI extracted milestones but they were missing required fields. Please check the document format.');
+        }
+      } else {
+        // Fallback to basic pattern matching if OpenAI is not configured
+        const datePattern = /\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4}/g;
+        const dates = textToAnalyze.match(datePattern);
+        if (dates && dates.length >= 2) {
+          addMilestone({
+            title: 'Extracted Milestone',
+            startDate: dates[0].includes('/') 
+              ? new Date(dates[0]).toISOString().split('T')[0]
+              : dates[0],
+            endDate: dates[1].includes('/')
+              ? new Date(dates[1]).toISOString().split('T')[0]
+              : dates[1],
+            phaseId: phases[0]?.id || '',
+            notes: 'Extracted from document (basic extraction - configure OpenAI for AI-powered extraction)',
+          });
+          alert('Milestone extracted using basic pattern matching. Configure OpenAI API key for AI-powered extraction.');
+        } else {
+          const today = new Date();
+          const nextWeek = new Date(today);
+          nextWeek.setDate(nextWeek.getDate() + 7);
+          addMilestone({
+            title: 'Phase 1 - Planning',
+            startDate: today.toISOString().split('T')[0],
+            endDate: nextWeek.toISOString().split('T')[0],
+            phaseId: phases[0]?.id || '',
+            notes: 'Extracted from document (basic extraction - configure OpenAI for AI-powered extraction)',
+          });
+          alert('Created default milestone. Configure OpenAI API key for AI-powered extraction.');
+        }
+        setDocumentText('');
+        setUploadedFile(null);
+      }
+    } catch (error: any) {
+      console.error('Error extracting milestones:', error);
+      alert(`Error extracting milestones: ${error.message || 'Unknown error'}. Please try again or check your OpenAI API key.`);
+    } finally {
       setIsExtracting(false);
-    }, 2000);
+    }
   };
 
   return (
