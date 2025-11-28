@@ -3,7 +3,37 @@ import { Plus, Eye, Trash2, X, Upload, FileText, File, Download, FileCheck } fro
 import { useApp } from '../context/AppContext';
 
 const PlansContractsView: React.FC = () => {
-  const { documents, files, addDocument, deleteDocument, uploadFile, getFile, updateDocumentText } = useApp();
+  let context;
+  try {
+    context = useApp();
+  } catch (error) {
+    console.error('Error in PlansContractsView:', error);
+    return (
+      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-red-500">Error loading Plans & Contracts. Please refresh the page.</p>
+      </div>
+    );
+  }
+
+  const { 
+    documents = [], 
+    files = [], 
+    addDocument, 
+    deleteDocument, 
+    uploadFile, 
+    getFile, 
+    updateDocumentText 
+  } = context || {};
+
+  // Safety check
+  if (!addDocument || !deleteDocument || !uploadFile || !getFile) {
+    return (
+      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
+
   const [showUpload, setShowUpload] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<string | null>(null);
   const [documentForm, setDocumentForm] = useState({

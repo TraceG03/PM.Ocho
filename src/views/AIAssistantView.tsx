@@ -9,7 +9,35 @@ interface Message {
 }
 
 const AIAssistantView: React.FC = () => {
-  const { milestones, addMilestone, phases, documents, uploadFile, getFile } = useApp();
+  let context;
+  try {
+    context = useApp();
+  } catch (error) {
+    console.error('Error in AIAssistantView:', error);
+    return (
+      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-red-500">Error loading AI Assistant. Please refresh the page.</p>
+      </div>
+    );
+  }
+
+  const { 
+    milestones = [], 
+    addMilestone, 
+    phases = [], 
+    documents = [], 
+    uploadFile, 
+    getFile 
+  } = context || {};
+
+  // Safety check
+  if (!addMilestone || !uploadFile || !getFile) {
+    return (
+      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
   const [activeTab, setActiveTab] = useState<'chat' | 'extractor'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -30,7 +58,7 @@ const AIAssistantView: React.FC = () => {
 
   // Enhanced function to search through documents for relevant information
   const searchDocuments = (query: string): string => {
-    if (documents.length === 0) {
+    if (!documents || documents.length === 0) {
       return `I don't have any documents uploaded yet. Please upload plans or contracts in the Plans & Contracts tab, and then I'll be able to answer questions about them.`;
     }
 
@@ -39,7 +67,7 @@ const AIAssistantView: React.FC = () => {
     const relevantDocs: Array<{ title: string; type: string; snippets: string[]; score: number }> = [];
 
     documents.forEach((doc) => {
-      if (!doc.textContent) return;
+      if (!doc || !doc.textContent) return;
 
       const textLower = doc.textContent.toLowerCase();
       const titleLower = doc.title.toLowerCase();
@@ -255,7 +283,7 @@ const AIAssistantView: React.FC = () => {
             endDate: dates[1].includes('/')
               ? new Date(dates[1]).toISOString().split('T')[0]
               : dates[1],
-            phaseId: phases[0]?.id || '',
+            phaseId: (phases && phases.length > 0) ? phases[0].id : '',
             notes: 'Extracted from document',
           },
           {
@@ -270,7 +298,7 @@ const AIAssistantView: React.FC = () => {
               : dates[2]?.includes('/')
               ? new Date(dates[2]).toISOString().split('T')[0]
               : dates[2] || dates[1],
-            phaseId: phases[1]?.id || phases[0]?.id || '',
+            phaseId: (phases && phases.length > 1) ? phases[1].id : ((phases && phases.length > 0) ? phases[0].id : ''),
             notes: 'Extracted from document',
           },
         ];
