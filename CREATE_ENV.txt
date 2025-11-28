@@ -1,0 +1,13 @@
+INSTRUCTIONS: Create a file named ".env" (without quotes) in the root of your project with the following content:
+
+VITE_SUPABASE_URL=https://qsocvmsfedmdnsjgsoyg.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFzb2N2bXNmZWRtZG5zamdzb3lnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNTI0MTYsImV4cCI6MjA3OTkyODQxNn0.vlp_b7JCzTcxek6rZ9hMneHJGp-HhLALHOl04_k2kTs
+
+Steps:
+1. In your project root (C:\Users\garre), create a new file named ".env"
+2. Copy and paste the two lines above into the file
+3. Save the file
+4. Restart your dev server (npm run dev)
+
+The .env file should be in the same directory as package.json
+

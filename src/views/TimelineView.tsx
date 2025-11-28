@@ -17,6 +17,7 @@ const TimelineView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [showManagePhases, setShowManagePhases] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [editingPhase, setEditingPhase] = useState<string | null>(null);
   const [newPhaseName, setNewPhaseName] = useState('');
@@ -50,7 +51,12 @@ const TimelineView: React.FC = () => {
   const handleSaveMilestone = async () => {
     if (milestoneForm.title && milestoneForm.startDate && milestoneForm.endDate && milestoneForm.phaseId) {
       try {
-        await addMilestone(milestoneForm);
+        if (editingMilestoneId) {
+          await updateMilestone(editingMilestoneId, milestoneForm);
+          setEditingMilestoneId(null);
+        } else {
+          await addMilestone(milestoneForm);
+        }
         setMilestoneForm({
           title: '',
           startDate: '',
@@ -133,7 +139,10 @@ const TimelineView: React.FC = () => {
       <div className="px-4 mt-4">
         <div className="bg-white rounded-3xl shadow-sm p-4">
           <button
-            onClick={() => setShowAddMilestone(!showAddMilestone)}
+            onClick={() => {
+              setEditingMilestoneId(null);
+              setShowAddMilestone(!showAddMilestone);
+            }}
             className="w-full flex items-center justify-between text-left"
           >
             <span className="font-semibold text-gray-900">Add Milestone</span>
@@ -223,7 +232,14 @@ const TimelineView: React.FC = () => {
                 <div className="flex gap-2 ml-2">
                   <button
                     onClick={() => {
-                      setMilestoneForm(milestone);
+                      setMilestoneForm({
+                        title: milestone.title,
+                        startDate: milestone.startDate,
+                        endDate: milestone.endDate,
+                        phaseId: milestone.phaseId,
+                        notes: milestone.notes,
+                      });
+                      setEditingMilestoneId(milestone.id);
                       setShowAddMilestone(true);
                     }}
                     className="p-2 text-gray-400 hover:text-gray-600"

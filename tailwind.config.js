@@ -7,8 +7,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        'accent-purple': '#8b5cf6',
-      },
+        primary: "#3b82f6",
+        accent: {
+          green: "#10b981",
+          purple: "#7c3aed",
+          indigo: "#6366f1"
+        }
+      }
     },
   },
   plugins: [],

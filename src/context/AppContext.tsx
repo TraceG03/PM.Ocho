@@ -37,13 +37,14 @@ export interface UploadedFile {
   uploadedAt: string;
 }
 
-export interface Note {
+export interface Document {
   id: string;
-  type: 'Plan Detail' | 'Spec';
-  refNumber: string;
+  type: 'Plan' | 'Contract';
   title: string;
-  details: string;
-  fileId?: string; // Reference to uploaded file
+  description: string;
+  fileId: string; // Reference to uploaded file
+  textContent?: string; // Extracted text for AI access
+  uploadedAt: string;
 }
 
 export interface Photo {
@@ -59,7 +60,7 @@ interface AppContextType {
   phases: Phase[];
   milestones: Milestone[];
   tasks: Task[];
-  notes: Note[];
+  documents: Document[];
   photos: Photo[];
   files: UploadedFile[];
   addPhase: (phase: Omit<Phase, 'id'>) => void;
@@ -71,10 +72,11 @@ interface AppContextType {
   addTask: (task: Omit<Task, 'id'>) => void;
   updateTask: (id: string, task: Partial<Task>) => void;
   deleteTask: (id: string) => void;
-  addNote: (note: Omit<Note, 'id'>) => void;
-  deleteNote: (id: string) => void;
+  addDocument: (document: Omit<Document, 'id' | 'uploadedAt'>) => void;
+  deleteDocument: (id: string) => void;
+  updateDocumentText: (id: string, textContent: string) => void;
   addPhoto: (photo: Omit<Photo, 'id'>) => void;
-  uploadFile: (file: File) => Promise<string>; // Returns file ID
+  uploadFile: (file: File) => Promise<UploadedFile>; // Returns uploaded file object
   getFile: (fileId: string) => UploadedFile | undefined;
   deleteFile: (fileId: string) => void;
 }
@@ -137,7 +139,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [phases, setPhases] = useState<Phase[]>(initialPhases);
   const [milestones, setMilestones] = useState<Milestone[]>(initialMilestones);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [notes, setNotes] = useState<Note[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [files, setFiles] = useState<UploadedFile[]>([]);
 
@@ -177,19 +179,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setTasks(tasks.filter(t => t.id !== id));
   };
 
-  const addNote = (note: Omit<Note, 'id'>) => {
-    setNotes([...notes, { ...note, id: Date.now().toString() }]);
+  const addDocument = (document: Omit<Document, 'id' | 'uploadedAt'>) => {
+    setDocuments(prevDocuments => [...prevDocuments, { 
+      ...document, 
+      id: Date.now().toString(),
+      uploadedAt: new Date().toISOString()
+    }]);
   };
 
-  const deleteNote = (id: string) => {
-    setNotes(notes.filter(n => n.id !== id));
+  const deleteDocument = (id: string) => {
+    setDocuments(prevDocuments => {
+      const doc = prevDocuments.find(d => d.id === id);
+      if (doc?.fileId) {
+        deleteFile(doc.fileId);
+      }
+      return prevDocuments.filter(d => d.id !== id);
+    });
+  };
+
+  const updateDocumentText = (id: string, textContent: string) => {
+    setDocuments(prevDocuments => prevDocuments.map(d => d.id === id ? { ...d, textContent } : d));
   };
 
   const addPhoto = (photo: Omit<Photo, 'id'>) => {
     setPhotos([...photos, { ...photo, id: Date.now().toString() }]);
   };
 
-  const uploadFile = async (file: File): Promise<string> => {
+  const uploadFile = async (file: File): Promise<UploadedFile> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -203,23 +219,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           dataUrl,
           uploadedAt: new Date().toISOString(),
         };
-        setFiles([...files, uploadedFile]);
-        resolve(fileId);
+        // Use functional update to avoid closure issues
+        setFiles(prevFiles => [...prevFiles, uploadedFile]);
+        // Return the file object directly instead of just the ID
+        resolve(uploadedFile);
       };
       reader.onerror = reject;
       reader.readAsDataURL(file);
     });
   };
 
+
   const getFile = (fileId: string): UploadedFile | undefined => {
     return files.find(f => f.id === fileId);
   };
 
   const deleteFile = (fileId: string) => {
-    setFiles(files.filter(f => f.id !== fileId));
-    // Also remove file references from notes and photos
-    setNotes(notes.map(n => n.fileId === fileId ? { ...n, fileId: undefined } : n));
-    setPhotos(photos.map(p => p.fileId === fileId ? { ...p, fileId: undefined, imageUrl: undefined } : p));
+    setFiles(prevFiles => prevFiles.filter(f => f.id !== fileId));
+    // Also remove file references from documents and photos
+    setDocuments(prevDocuments => prevDocuments.filter(d => d.fileId !== fileId));
+    setPhotos(prevPhotos => prevPhotos.map(p => p.fileId === fileId ? { ...p, fileId: undefined, imageUrl: undefined } : p));
   };
 
   return (
@@ -228,7 +247,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         phases,
         milestones,
         tasks,
-        notes,
+        documents,
         photos,
         files,
         addPhase,
@@ -240,8 +259,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addTask,
         updateTask,
         deleteTask,
-        addNote,
-        deleteNote,
+        addDocument,
+        deleteDocument,
+        updateDocumentText,
         addPhoto,
         uploadFile,
         getFile,

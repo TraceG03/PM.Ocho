@@ -9,7 +9,7 @@ interface QuickTodo {
 }
 
 const DailyTasksView: React.FC = () => {
-  const { tasks, milestones, notes, addTask, updateTask, deleteTask } = useApp();
+  const { tasks, milestones, documents, addTask, updateTask, deleteTask } = useApp();
   const [quickTodos, setQuickTodos] = useState<QuickTodo[]>([]);
   const [quickTodoInput, setQuickTodoInput] = useState('');
   const [showAddTask, setShowAddTask] = useState(false);
@@ -234,9 +234,9 @@ const DailyTasksView: React.FC = () => {
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
               >
                 <option value="">Related Document (Optional)</option>
-                {notes.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {n.title}
+                {documents.map((doc) => (
+                  <option key={doc.id} value={doc.id}>
+                    {doc.title}
                   </option>
                 ))}
               </select>

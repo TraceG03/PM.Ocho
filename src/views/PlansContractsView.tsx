@@ -32,11 +32,13 @@ const PlansContractsView: React.FC = () => {
     description: '',
   });
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const processFile = async (file: File) => {
     if (!file) return;
+
+    // Accept any file type
 
     setUploading(true);
     try {
@@ -49,35 +51,32 @@ const PlansContractsView: React.FC = () => {
 
       // Extract text content for AI access
       let textContent = '';
-      if (file.type === 'text/plain') {
-        const reader = new FileReader();
-        textContent = await new Promise<string>((resolve, reject) => {
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.onerror = reject;
-          reader.readAsText(file);
-        });
-      } else if (file.type.includes('pdf')) {
-        // For PDFs, extract text from base64 data URL
-        // Note: This is a simplified extraction. For production, use a PDF parsing library like pdf.js
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        // For text files, try to read the content
         try {
-          const base64Data = uploadedFile.dataUrl.split(',')[1];
-          // Try to decode and extract readable text
-          // This is a basic implementation - full PDF parsing would require a library
-          textContent = `PDF Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[PDF content extraction: The document "${file.name}" has been uploaded. While full text extraction from PDFs requires additional libraries, you can ask me questions about this document and I'll reference it by name and metadata. For full text search, consider uploading the document content as a text file or using a PDF-to-text converter.]`;
+          const reader = new FileReader();
+          textContent = await new Promise<string>((resolve, reject) => {
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.onerror = reject;
+            reader.readAsText(file);
+          });
         } catch (error) {
-          textContent = `PDF Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}`;
+          textContent = `Text Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}`;
         }
-      } else if (file.type.includes('image')) {
+      } else if (file.type.includes('pdf') || file.name.endsWith('.pdf')) {
+        // For PDFs, store metadata
+        textContent = `PDF Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[PDF content extraction: The document "${file.name}" has been uploaded. While full text extraction from PDFs requires additional libraries, you can ask me questions about this document and I'll reference it by name and metadata. For full text search, consider uploading the document content as a text file or using a PDF-to-text converter.]`;
+      } else if (file.type.includes('image') || /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(file.name)) {
         // For images, store metadata
         textContent = `Image Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[This is an image file. You can view it in the document viewer. For text-based questions, please upload text or PDF documents.]`;
       } else {
-        // For other file types, store metadata
-        textContent = `Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}\n\n[Document uploaded. You can ask me about this document and I'll reference it by name and metadata.]`;
+        // For all other file types, store metadata
+        textContent = `Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}\nFile Size: ${(file.size / 1024).toFixed(2)} KB\n\n[Document uploaded. You can ask me about this document and I'll reference it by name and metadata.]`;
       }
 
       // Create document
       const documentId = Date.now().toString();
-      await addDocument({
+      addDocument({
         type: documentForm.type,
         title: documentForm.title || file.name,
         description: documentForm.description,
@@ -100,6 +99,36 @@ const PlansContractsView: React.FC = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await processFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processFile(files[0]);
     }
   };
 
@@ -177,17 +206,22 @@ const PlansContractsView: React.FC = () => {
                 type="file"
                 onChange={handleFileSelect}
                 className="hidden"
-                accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
               />
               
-              <button
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-700 hover:border-accent-purple hover:bg-purple-50 transition-colors disabled:opacity-50"
+                className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed transition-all cursor-pointer ${
+                  isDragging
+                    ? 'border-accent-purple bg-purple-100 scale-105'
+                    : 'border-gray-300 text-gray-700 hover:border-accent-purple hover:bg-purple-50'
+                } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <Upload size={20} />
-                <span>{uploading ? 'Uploading...' : 'Select File to Upload'}</span>
-              </button>
+                <span>{uploading ? 'Uploading...' : isDragging ? 'Drop file here' : 'Select Any File to Upload or Drag & Drop'}</span>
+              </div>
             </div>
           )}
         </div>
@@ -253,14 +287,7 @@ const PlansContractsView: React.FC = () => {
                         <Eye size={18} />
                       </button>
                       <button
-                        onClick={async () => {
-                          try {
-                            await deleteDocument(document.id);
-                          } catch (error) {
-                            console.error('Error deleting document:', error);
-                            alert('Failed to delete document. Please try again.');
-                          }
-                        }}
+                        onClick={() => deleteDocument(document.id)}
                         className="p-2 text-gray-400 hover:text-red-500"
                         title="Delete"
                       >

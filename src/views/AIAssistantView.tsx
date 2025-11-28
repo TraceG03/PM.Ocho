@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Bot, Send, Upload, FileText, Sparkles, X } from 'lucide-react';
+import { Bot, Send, Upload, FileText, Sparkles, X, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContextSupabase';
+import { openai, isOpenAIConfigured } from '../lib/openai';
 
 interface Message {
   id: string;
@@ -28,11 +29,17 @@ const AIAssistantView: React.FC = () => {
       </div>
     );
   }
+  
+  // Check if OpenAI is configured
+  const openAIConfigured = isOpenAIConfigured();
+  
   const [activeTab, setActiveTab] = useState<'chat' | 'extractor'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm your AI construction site assistant. I can help you with questions about your uploaded plans and contracts, timeline planning, safety guidelines, and material estimates. How can I help you today?",
+      text: openAIConfigured 
+        ? "Hello! I'm your AI construction site assistant powered by ChatGPT. I can help you with questions about your uploaded plans and contracts, timeline planning, safety guidelines, and material estimates. How can I help you today?"
+        : "Hello! I'm your AI construction site assistant. I can help you with questions about your uploaded plans and contracts, timeline planning, safety guidelines, and material estimates. How can I help you today?",
       sender: 'assistant',
     },
   ]);
@@ -42,27 +49,84 @@ const AIAssistantView: React.FC = () => {
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedChips = ['Timeline planning', 'Safety guidelines', 'Material estimates'];
 
-  // Enhanced function to search through documents for relevant information
-  const searchDocuments = (query: string): string => {
+  // Enhanced function to search through documents and their file contents
+  const searchDocuments = async (query: string): Promise<string> => {
     if (!documents || documents.length === 0) {
       return `I don't have any documents uploaded yet. Please upload plans or contracts in the Plans & Contracts tab, and then I'll be able to answer questions about them.`;
     }
 
     const queryLower = query.toLowerCase();
     const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
-    const relevantDocs: Array<{ title: string; type: string; snippets: string[]; score: number }> = [];
+    const relevantDocs: Array<{ 
+      title: string; 
+      type: string; 
+      snippets: string[]; 
+      score: number;
+      fullContent?: string;
+    }> = [];
 
-    documents.forEach((doc) => {
-      if (!doc || !doc.textContent) return;
+    // Search through all documents
+    for (const doc of documents) {
+      if (!doc) continue;
 
-      const textLower = doc.textContent.toLowerCase();
+      let searchableContent = doc.textContent || '';
       const titleLower = doc.title.toLowerCase();
       let score = 0;
       const snippets: string[] = [];
+
+      // Try to get the actual file content if available
+      if (doc.fileId) {
+        const fileData = getFile(doc.fileId);
+        if (fileData && fileData.dataUrl) {
+          try {
+            // Extract text from file based on type
+            if (fileData.type === 'text/plain' || fileData.name.endsWith('.txt')) {
+              // For text files, decode the base64 content
+              const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
+              if (base64Match) {
+                try {
+                  const decoded = atob(base64Match[1]);
+                  searchableContent = decoded;
+                } catch (e) {
+                  // If decode fails, try without base64 prefix
+                  searchableContent = fileData.dataUrl.replace(/^data:text\/plain[^,]*,/, '');
+                }
+              } else {
+                // Try direct text extraction
+                searchableContent = fileData.dataUrl.replace(/^data:[^;]*;base64,/, '');
+                try {
+                  searchableContent = atob(searchableContent);
+                } catch (e) {
+                  // Keep original if decode fails
+                }
+              }
+            } else if (fileData.type.includes('pdf') || fileData.name.endsWith('.pdf')) {
+              // For PDFs, we can search the metadata textContent that was extracted
+              // In a production app, you'd use a PDF parsing library
+              searchableContent = doc.textContent || `PDF Document: ${fileData.name}`;
+            } else {
+              // For other file types, use the extracted textContent
+              searchableContent = doc.textContent || `Document: ${fileData.name}`;
+            }
+          } catch (error) {
+            console.error('Error reading file content:', error);
+            // Fall back to textContent
+            searchableContent = doc.textContent || '';
+          }
+        }
+      }
+
+      if (!searchableContent || searchableContent.trim().length === 0) {
+        continue;
+      }
+
+      const contentLower = searchableContent.toLowerCase();
 
       // Check title match (higher weight)
       if (titleLower.includes(queryLower)) {
@@ -72,31 +136,43 @@ const AIAssistantView: React.FC = () => {
         if (titleLower.includes(word)) score += 3;
       });
 
-      // Check content match
-      if (textLower.includes(queryLower)) {
-        score += 5;
-        // Extract context around the match
-        const index = textLower.indexOf(queryLower);
-        const start = Math.max(0, index - 100);
-        const end = Math.min(textLower.length, index + queryLower.length + 100);
-        const context = doc.textContent.substring(start, end).trim();
-        if (context.length > 0) {
-          snippets.push(context);
+      // Check for exact phrase match in content
+      if (contentLower.includes(queryLower)) {
+        score += 8;
+        // Extract multiple contexts around matches
+        let searchIndex = 0;
+        let matchCount = 0;
+        while (matchCount < 3 && searchIndex < contentLower.length) {
+          const index = contentLower.indexOf(queryLower, searchIndex);
+          if (index === -1) break;
+          
+          const start = Math.max(0, index - 150);
+          const end = Math.min(searchableContent.length, index + queryLower.length + 150);
+          const context = searchableContent.substring(start, end).trim();
+          
+          // Clean up context (remove partial words at start/end)
+          const cleanContext = context.replace(/^[^\s]*\s/, '').replace(/\s[^\s]*$/, '');
+          if (cleanContext.length > 20 && !snippets.includes(cleanContext)) {
+            snippets.push(cleanContext);
+            matchCount++;
+          }
+          searchIndex = index + 1;
         }
       }
 
       // Check for individual word matches
       queryWords.forEach(word => {
-        if (textLower.includes(word)) {
-          score += 1;
-          // Find sentences containing the word
-          const sentences = doc.textContent.split(/[.!?\n]+/);
+        if (contentLower.includes(word)) {
+          score += 2;
+          // Find sentences/paragraphs containing the word
+          const sentences = searchableContent.split(/[.!?\n]+/);
           const matchingSentences = sentences
-            .filter(s => s.toLowerCase().includes(word))
-            .slice(0, 2);
+            .filter(s => s.toLowerCase().includes(word) && s.trim().length > 10)
+            .slice(0, 3);
           matchingSentences.forEach(s => {
-            if (!snippets.includes(s.trim())) {
-              snippets.push(s.trim());
+            const trimmed = s.trim();
+            if (trimmed.length > 0 && !snippets.some(existing => existing.includes(trimmed))) {
+              snippets.push(trimmed);
             }
           });
         }
@@ -110,11 +186,12 @@ const AIAssistantView: React.FC = () => {
         relevantDocs.push({
           title: doc.title,
           type: doc.type,
-          snippets: snippets.slice(0, 3), // Limit to 3 snippets
-          score
+          snippets: snippets.slice(0, 5), // Get up to 5 relevant snippets
+          score,
+          fullContent: searchableContent.length > 5000 ? searchableContent.substring(0, 5000) : searchableContent
         });
       }
-    });
+    }
 
     // Sort by relevance score
     relevantDocs.sort((a, b) => b.score - a.score);
@@ -126,13 +203,32 @@ const AIAssistantView: React.FC = () => {
       topDocs.forEach((doc, index) => {
         response += `${index + 1}. **${doc.title}** (${doc.type})\n`;
         if (doc.snippets.length > 0) {
-          response += `   ${doc.snippets[0]}\n`;
+          // Show the most relevant snippets
+          doc.snippets.slice(0, 2).forEach((snippet, i) => {
+            if (snippet.length > 0) {
+              response += `   ${i + 1}. ${snippet.substring(0, 200)}${snippet.length > 200 ? '...' : ''}\n`;
+            }
+          });
         }
         response += `\n`;
       });
 
       if (relevantDocs.length > 3) {
         response += `\nAnd ${relevantDocs.length - 3} more document(s) may contain relevant information.`;
+      }
+
+      // Provide a more specific answer if we found good matches
+      const bestMatch = relevantDocs[0];
+      if (bestMatch && bestMatch.score >= 5) {
+        response += `\n\n**Answer:** Based on the document "${bestMatch.title}", `;
+        // Try to extract a direct answer from the best snippet
+        const bestSnippet = bestMatch.snippets[0] || '';
+        if (bestSnippet.length > 50) {
+          response += bestSnippet.substring(0, 300);
+          if (bestSnippet.length > 300) response += '...';
+        } else {
+          response += `the information you're looking for appears in this document.`;
+        }
       }
 
       response += `\n\nWould you like me to search for something more specific?`;
@@ -144,7 +240,7 @@ const AIAssistantView: React.FC = () => {
     return `I couldn't find specific information about "${query}" in the uploaded documents.\n\nI have access to ${documents.length} document(s): ${docList}\n\nTry asking about:\n- Specific document titles\n- Information that might be in plans or contracts\n- Or upload more documents with the information you need`;
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
 
     const userMessage: Message = {
@@ -157,32 +253,76 @@ const AIAssistantView: React.FC = () => {
     const currentQuery = inputText;
     setInputText('');
     setIsProcessing(true);
+    setAiError(null);
 
-    // Process the query and search documents
-    setTimeout(() => {
+    try {
       let response = '';
-      
-      // Check if query is about documents
-      const documentKeywords = ['document', 'plan', 'contract', 'specification', 'spec', 'detail', 'upload', 'file', 'what does', 'tell me about', 'information about', 'what is in'];
-      const isDocumentQuery = documentKeywords.some(keyword => 
-        currentQuery.toLowerCase().includes(keyword)
-      ) || documents.length > 0;
 
-      if (isDocumentQuery && documents.length > 0) {
-        // Search through documents
-        response = searchDocuments(currentQuery);
-      } else if (currentQuery.toLowerCase().includes('timeline') || currentQuery.toLowerCase().includes('schedule')) {
-        response = `I can help with timeline planning. You currently have ${milestones.length} milestone(s) in your timeline. Would you like me to help create new milestones or analyze your existing timeline?`;
-      } else if (currentQuery.toLowerCase().includes('safety')) {
-        response = `Here are some general construction safety guidelines:\n\n1. Always wear appropriate PPE (hard hat, safety glasses, steel-toed boots)\n2. Follow proper lockout/tagout procedures\n3. Maintain clear work areas and proper signage\n4. Conduct regular safety inspections\n5. Ensure all workers are properly trained\n\nFor project-specific safety requirements, please check your uploaded plans and contracts.`;
-      } else if (currentQuery.toLowerCase().includes('material') || currentQuery.toLowerCase().includes('estimate')) {
-        response = `I can help with material estimates. To provide accurate estimates, I would need:\n- Project dimensions and specifications\n- Material types and grades\n- Quantity requirements\n\nThis information is typically found in your project plans. Would you like me to search through your uploaded documents for material specifications?`;
-      } else {
-        // General response
+      if (openAIConfigured && openai) {
+        // Use OpenAI ChatGPT
+        // First, get relevant document context
+        let documentContext = '';
         if (documents.length > 0) {
-          response = `I understand you're asking about: "${currentQuery}". I have access to ${documents.length} document(s) that might contain relevant information. Let me search through them...\n\n${searchDocuments(currentQuery)}`;
+          const relevantDocs = await searchDocuments(currentQuery);
+          documentContext = `\n\nRelevant information from uploaded documents:\n${relevantDocs}`;
+        }
+
+        // Build system prompt with context
+        const systemPrompt = `You are an AI construction site assistant. You help with construction project management, including:
+- Timeline planning and milestone tracking
+- Safety guidelines and best practices
+- Material estimates and specifications
+- Answering questions about uploaded project documents (plans, contracts, specifications)
+
+Current project context:
+- ${milestones.length} milestone(s) in the timeline
+- ${phases.length} phase(s) defined
+- ${documents.length} document(s) uploaded
+
+When answering questions:
+- Be helpful, professional, and construction-focused
+- Reference specific information from uploaded documents when available
+- Provide practical, actionable advice
+- If you don't have information, say so clearly`;
+
+        const userPrompt = currentQuery + documentContext;
+
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini', // Using gpt-4o-mini for cost efficiency, can be changed to gpt-4 or gpt-3.5-turbo
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...messages.slice(-5).map(msg => ({
+              role: msg.sender === 'user' ? 'user' : 'assistant',
+              content: msg.text
+            })),
+            { role: 'user', content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 1000,
+        });
+
+        response = completion.choices[0]?.message?.content || 'I apologize, but I encountered an error generating a response.';
+      } else {
+        // Fallback to rule-based system if OpenAI is not configured
+        const documentKeywords = ['document', 'plan', 'contract', 'specification', 'spec', 'detail', 'upload', 'file', 'what does', 'tell me about', 'information about', 'what is in', 'what says', 'what contains', 'show me', 'find', 'search'];
+        const isDocumentQuery = documentKeywords.some(keyword => 
+          currentQuery.toLowerCase().includes(keyword)
+        ) || documents.length > 0;
+
+        if (isDocumentQuery && documents.length > 0) {
+          response = await searchDocuments(currentQuery);
+        } else if (currentQuery.toLowerCase().includes('timeline') || currentQuery.toLowerCase().includes('schedule')) {
+          response = `I can help with timeline planning. You currently have ${milestones.length} milestone(s) in your timeline. Would you like me to help create new milestones or analyze your existing timeline?`;
+        } else if (currentQuery.toLowerCase().includes('safety')) {
+          response = `Here are some general construction safety guidelines:\n\n1. Always wear appropriate PPE (hard hat, safety glasses, steel-toed boots)\n2. Follow proper lockout/tagout procedures\n3. Maintain clear work areas and proper signage\n4. Conduct regular safety inspections\n5. Ensure all workers are properly trained\n\nFor project-specific safety requirements, please check your uploaded plans and contracts.`;
+        } else if (currentQuery.toLowerCase().includes('material') || currentQuery.toLowerCase().includes('estimate')) {
+          response = `I can help with material estimates. To provide accurate estimates, I would need:\n- Project dimensions and specifications\n- Material types and grades\n- Quantity requirements\n\nThis information is typically found in your project plans. Would you like me to search through your uploaded documents for material specifications?`;
         } else {
-          response = `I understand you're asking about: "${currentQuery}". I can help with timeline planning, safety guidelines, and material estimates. To answer questions about your specific project, please upload your plans and contracts in the Plans & Contracts tab.`;
+          if (documents.length > 0) {
+            response = `I understand you're asking about: "${currentQuery}". Let me search through your ${documents.length} document(s) for relevant information...\n\n${await searchDocuments(currentQuery)}`;
+          } else {
+            response = `I understand you're asking about: "${currentQuery}". I can help with timeline planning, safety guidelines, and material estimates. To answer questions about your specific project, please upload your plans and contracts in the Plans & Contracts tab.`;
+          }
         }
       }
 
@@ -192,28 +332,34 @@ const AIAssistantView: React.FC = () => {
         sender: 'assistant',
       };
       setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error: any) {
+      console.error('AI Error:', error);
+      setAiError(error.message || 'Failed to get AI response. Please check your OpenAI API key.');
+      
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: `I apologize, but I encountered an error: ${error.message || 'Unable to process your request'}. Please check your OpenAI API key configuration or try again later.`,
+        sender: 'assistant',
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
       setIsProcessing(false);
-    }, 1500);
+    }
   };
 
   const handleSuggestedChip = (chip: string) => {
     setInputText(chip);
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const processFile = async (file: File) => {
     if (!file) return;
 
-    // Check file type
-    const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(txt|pdf|doc|docx)$/i)) {
-      alert('Please upload a text, PDF, or Word document');
-      return;
-    }
+    // Accept any file type
 
     setUploading(true);
     try {
-      const fileId = await uploadFile(file);
+      const uploadedFileObj = await uploadFile(file);
+      const fileId = uploadedFileObj.id;
       setUploadedFile(fileId);
       
       // Try to extract text from the file
@@ -245,6 +391,36 @@ const AIAssistantView: React.FC = () => {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await processFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await processFile(files[0]);
     }
   };
 
@@ -337,6 +513,20 @@ const AIAssistantView: React.FC = () => {
         <div className="px-4 py-4">
           <h1 className="text-2xl font-bold text-gray-900">AI Assistant</h1>
           <p className="text-sm text-gray-500 mt-1">Get help with your construction project</p>
+          {!openAIConfigured && (
+            <div className="mt-2 bg-yellow-50 border border-yellow-200 rounded-lg p-2 flex items-center gap-2">
+              <AlertCircle size={16} className="text-yellow-600" />
+              <p className="text-xs text-yellow-800">
+                OpenAI API key not configured. Using rule-based responses. Add VITE_OPENAI_API_KEY to .env for ChatGPT.
+              </p>
+            </div>
+          )}
+          {aiError && (
+            <div className="mt-2 bg-red-50 border border-red-200 rounded-lg p-2 flex items-center gap-2">
+              <AlertCircle size={16} className="text-red-600" />
+              <p className="text-xs text-red-800">{aiError}</p>
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -468,19 +658,26 @@ const AIAssistantView: React.FC = () => {
               type="file"
               onChange={handleFileUpload}
               className="hidden"
-              accept=".txt,.pdf,.doc,.docx"
             />
             
             {!uploadedFile ? (
-              <button
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-accent-purple hover:bg-purple-50 transition-colors disabled:opacity-50"
+                className={`w-full border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                  isDragging
+                    ? 'border-accent-purple bg-purple-100 scale-105'
+                    : 'border-gray-300 hover:border-accent-purple hover:bg-purple-50'
+                } ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <Upload size={48} className="mx-auto text-gray-400 mb-2" />
-                <p className="text-sm text-gray-500">{uploading ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
-                <p className="text-xs text-gray-400 mt-1">PDF, DOCX, TXT files</p>
-              </button>
+                <Upload size={48} className={`mx-auto mb-2 ${isDragging ? 'text-accent-purple' : 'text-gray-400'}`} />
+                <p className="text-sm text-gray-500">
+                  {uploading ? 'Uploading...' : isDragging ? 'Drop file here' : 'Click to upload or drag and drop'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">Any file type accepted</p>
+              </div>
             ) : (
               <div className="border-2 border-accent-purple rounded-2xl p-4 mb-4 bg-purple-50">
                 <div className="flex items-center justify-between">
