@@ -62,14 +62,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       setLoading(true);
       
+      // Check if supabase is available
+      if (!supabase) {
+        console.warn('Supabase not configured. Using empty state.');
+        setLoading(false);
+        return;
+      }
+      
       // Load phases
       const { data: phasesData, error: phasesError } = await supabase
         .from('phases')
         .select('*')
         .order('created_at', { ascending: true });
       
-      if (phasesError) throw phasesError;
-      setPhases(phasesData?.map(p => ({ id: p.id, name: p.name, color: p.color })) || []);
+      if (phasesError) {
+        console.error('Error loading phases:', phasesError);
+        // Don't throw, just use empty array
+      } else {
+        setPhases(phasesData?.map(p => ({ id: p.id, name: p.name, color: p.color })) || []);
+      }
 
       // Load milestones
       const { data: milestonesData, error: milestonesError } = await supabase
@@ -77,15 +88,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .select('*')
         .order('start_date', { ascending: true });
       
-      if (milestonesError) throw milestonesError;
-      setMilestones(milestonesData?.map(m => ({
-        id: m.id,
-        title: m.title,
-        startDate: m.start_date,
-        endDate: m.end_date,
-        phaseId: m.phase_id,
-        notes: m.notes || '',
-      })) || []);
+      if (milestonesError) {
+        console.error('Error loading milestones:', milestonesError);
+      } else {
+        setMilestones(milestonesData?.map(m => ({
+          id: m.id,
+          title: m.title,
+          startDate: m.start_date,
+          endDate: m.end_date,
+          phaseId: m.phase_id,
+          notes: m.notes || '',
+        })) || []);
+      }
 
       // Load tasks
       const { data: tasksData, error: tasksError } = await supabase
@@ -93,19 +107,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .select('*')
         .order('date', { ascending: false });
       
-      if (tasksError) throw tasksError;
-      setTasks(tasksData?.map(t => ({
-        id: t.id,
-        name: t.name,
-        date: t.date,
-        category: t.category,
-        priority: t.priority,
-        crew: t.crew || '',
-        notes: t.notes || '',
-        completed: t.completed || false,
-        relatedMilestoneId: t.related_milestone_id,
-        relatedDocumentId: t.related_document_id,
-      })) || []);
+      if (tasksError) {
+        console.error('Error loading tasks:', tasksError);
+      } else {
+        setTasks(tasksData?.map(t => ({
+          id: t.id,
+          name: t.name,
+          date: t.date,
+          category: t.category,
+          priority: t.priority,
+          crew: t.crew || '',
+          notes: t.notes || '',
+          completed: t.completed || false,
+          relatedMilestoneId: t.related_milestone_id,
+          relatedDocumentId: t.related_document_id,
+        })) || []);
+      }
 
       // Load files
       const { data: filesData, error: filesError } = await supabase
@@ -113,15 +130,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .select('*')
         .order('uploaded_at', { ascending: false });
       
-      if (filesError) throw filesError;
-      setFiles(filesData?.map(f => ({
-        id: f.id,
-        name: f.name,
-        type: f.type,
-        size: f.size,
-        dataUrl: f.data_url,
-        uploadedAt: f.uploaded_at,
-      })) || []);
+      if (filesError) {
+        console.error('Error loading files:', filesError);
+      } else {
+        setFiles(filesData?.map(f => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          size: f.size,
+          dataUrl: f.data_url,
+          uploadedAt: f.uploaded_at,
+        })) || []);
+      }
 
       // Load documents
       const { data: documentsData, error: documentsError } = await supabase
@@ -129,16 +149,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .select('*')
         .order('uploaded_at', { ascending: false });
       
-      if (documentsError) throw documentsError;
-      setDocuments(documentsData?.map(d => ({
-        id: d.id,
-        type: d.type,
-        title: d.title,
-        description: d.description || '',
-        fileId: d.file_id,
-        textContent: d.text_content,
-        uploadedAt: d.uploaded_at,
-      })) || []);
+      if (documentsError) {
+        console.error('Error loading documents:', documentsError);
+      } else {
+        setDocuments(documentsData?.map(d => ({
+          id: d.id,
+          type: d.type,
+          title: d.title,
+          description: d.description || '',
+          fileId: d.file_id,
+          textContent: d.text_content,
+          uploadedAt: d.uploaded_at,
+        })) || []);
+      }
 
       // Load photos
       const { data: photosData, error: photosError } = await supabase
@@ -146,18 +169,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (photosError) throw photosError;
-      setPhotos(photosData?.map(p => ({
-        id: p.id,
-        caption: p.caption || '',
-        date: p.date,
-        source: p.source,
-        fileId: p.file_id,
-        imageUrl: p.image_url,
-      })) || []);
+      if (photosError) {
+        console.error('Error loading photos:', photosError);
+      } else {
+        setPhotos(photosData?.map(p => ({
+          id: p.id,
+          caption: p.caption || '',
+          date: p.date,
+          source: p.source,
+          fileId: p.file_id,
+          imageUrl: p.image_url,
+        })) || []);
+      }
 
     } catch (error) {
       console.error('Error loading data from Supabase:', error);
+      // Don't crash the app, just log the error
     } finally {
       setLoading(false);
     }
@@ -181,6 +208,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updatePhase = async (id: string, updatedPhase: Partial<Phase>) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Updating phase in local state only.');
+      setPhases(prev => prev.map(p => p.id === id ? { ...p, ...updatedPhase } : p));
+      return;
+    }
+    
     const { error } = await supabase
       .from('phases')
       .update({
@@ -191,13 +224,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error updating phase:', error);
-      throw error;
+      // Still update local state even if Supabase fails
     }
     
     setPhases(prev => prev.map(p => p.id === id ? { ...p, ...updatedPhase } : p));
   };
 
   const deletePhase = async (id: string) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Deleting phase from local state only.');
+      setPhases(prev => prev.filter(p => p.id !== id));
+      return;
+    }
+    
     const { error } = await supabase
       .from('phases')
       .delete()
@@ -205,7 +244,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error deleting phase:', error);
-      throw error;
+      // Still delete from local state even if Supabase fails
     }
     
     setPhases(prev => prev.filter(p => p.id !== id));
@@ -215,6 +254,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addMilestone = async (milestone: Omit<Milestone, 'id'>) => {
     const id = Date.now().toString();
     const newMilestone = { ...milestone, id };
+    
+    if (!supabase) {
+      console.warn('Supabase not configured. Adding milestone to local state only.');
+      setMilestones(prev => [...prev, newMilestone]);
+      return;
+    }
     
     const { error } = await supabase
       .from('milestones')
@@ -229,13 +274,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error adding milestone:', error);
-      throw error;
+      // Still add to local state even if Supabase fails
     }
     
     setMilestones(prev => [...prev, newMilestone]);
   };
 
   const updateMilestone = async (id: string, updatedMilestone: Partial<Milestone>) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Updating milestone in local state only.');
+      setMilestones(prev => prev.map(m => {
+        if (m.id === id) {
+          return {
+            ...m,
+            ...updatedMilestone,
+            startDate: updatedMilestone.startDate ?? m.startDate,
+            endDate: updatedMilestone.endDate ?? m.endDate,
+            phaseId: updatedMilestone.phaseId ?? m.phaseId,
+          };
+        }
+        return m;
+      }));
+      return;
+    }
+    
     const updateData: any = {};
     if (updatedMilestone.title !== undefined) updateData.title = updatedMilestone.title;
     if (updatedMilestone.startDate !== undefined) updateData.start_date = updatedMilestone.startDate;
@@ -250,7 +312,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error updating milestone:', error);
-      throw error;
+      // Still update local state even if Supabase fails
     }
     
     setMilestones(prev => prev.map(m => {
@@ -268,6 +330,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteMilestone = async (id: string) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Deleting milestone from local state only.');
+      setMilestones(prev => prev.filter(m => m.id !== id));
+      return;
+    }
+    
     const { error } = await supabase
       .from('milestones')
       .delete()
@@ -275,7 +343,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error deleting milestone:', error);
-      throw error;
+      // Still delete from local state even if Supabase fails
     }
     
     setMilestones(prev => prev.filter(m => m.id !== id));
@@ -285,6 +353,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addTask = async (task: Omit<Task, 'id'>) => {
     const id = Date.now().toString();
     const newTask = { ...task, id, completed: false };
+    
+    if (!supabase) {
+      console.warn('Supabase not configured. Adding task to local state only.');
+      setTasks(prev => [...prev, newTask]);
+      return;
+    }
     
     const { error } = await supabase
       .from('tasks')
@@ -303,13 +377,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error adding task:', error);
-      throw error;
+      // Still add to local state even if Supabase fails
     }
     
     setTasks(prev => [...prev, newTask]);
   };
 
   const updateTask = async (id: string, updatedTask: Partial<Task>) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Updating task in local state only.');
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updatedTask } : t));
+      return;
+    }
+    
     const updateData: any = {};
     if (updatedTask.name !== undefined) updateData.name = updatedTask.name;
     if (updatedTask.date !== undefined) updateData.date = updatedTask.date;
@@ -328,13 +408,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error updating task:', error);
-      throw error;
+      // Still update local state even if Supabase fails
     }
     
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updatedTask } : t));
   };
 
   const deleteTask = async (id: string) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Deleting task from local state only.');
+      setTasks(prev => prev.filter(t => t.id !== id));
+      return;
+    }
+    
     const { error } = await supabase
       .from('tasks')
       .delete()
@@ -342,7 +428,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error deleting task:', error);
-      throw error;
+      // Still delete from local state even if Supabase fails
     }
     
     setTasks(prev => prev.filter(t => t.id !== id));
@@ -365,20 +451,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             uploadedAt: new Date().toISOString(),
           };
 
-          // Save to Supabase
-          const { error } = await supabase
-            .from('files')
-            .insert({
-              id: fileId,
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              data_url: dataUrl,
-            });
+          // Save to Supabase if available
+          if (supabase) {
+            const { error } = await supabase
+              .from('files')
+              .insert({
+                id: fileId,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data_url: dataUrl,
+              });
 
-          if (error) {
-            console.error('Error uploading file to Supabase:', error);
-            throw error;
+            if (error) {
+              console.error('Error uploading file to Supabase:', error);
+              // Still add to local state even if Supabase fails
+            }
+          } else {
+            console.warn('Supabase not configured. File saved to local state only.');
           }
 
           setFiles(prev => [...prev, uploadedFile]);
@@ -397,14 +487,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteFile = async (fileId: string) => {
-    const { error } = await supabase
-      .from('files')
-      .delete()
-      .eq('id', fileId);
-    
-    if (error) {
-      console.error('Error deleting file:', error);
-      throw error;
+    if (supabase) {
+      const { error } = await supabase
+        .from('files')
+        .delete()
+        .eq('id', fileId);
+      
+      if (error) {
+        console.error('Error deleting file:', error);
+        // Still delete from local state even if Supabase fails
+      }
     }
     
     setFiles(prev => prev.filter(f => f.id !== fileId));
@@ -417,6 +509,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const id = Date.now().toString();
     const uploadedAt = new Date().toISOString();
     const newDocument = { ...document, id, uploadedAt };
+    
+    if (!supabase) {
+      console.warn('Supabase not configured. Adding document to local state only.');
+      setDocuments(prev => [...prev, newDocument]);
+      return;
+    }
     
     const { error } = await supabase
       .from('documents')
@@ -431,7 +529,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error adding document:', error);
-      throw error;
+      // Still add to local state even if Supabase fails
     }
     
     setDocuments(prev => [...prev, newDocument]);
@@ -443,20 +541,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await deleteFile(doc.fileId);
     }
     
-    const { error } = await supabase
-      .from('documents')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      console.error('Error deleting document:', error);
-      throw error;
+    if (supabase) {
+      const { error } = await supabase
+        .from('documents')
+        .delete()
+        .eq('id', id);
+      
+      if (error) {
+        console.error('Error deleting document:', error);
+        // Still delete from local state even if Supabase fails
+      }
     }
     
     setDocuments(prev => prev.filter(d => d.id !== id));
   };
 
   const updateDocumentText = async (id: string, textContent: string) => {
+    if (!supabase) {
+      console.warn('Supabase not configured. Updating document text in local state only.');
+      setDocuments(prev => prev.map(d => d.id === id ? { ...d, textContent } : d));
+      return;
+    }
+    
     const { error } = await supabase
       .from('documents')
       .update({ text_content: textContent })
@@ -464,7 +570,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error updating document text:', error);
-      throw error;
+      // Still update local state even if Supabase fails
     }
     
     setDocuments(prev => prev.map(d => d.id === id ? { ...d, textContent } : d));
@@ -474,6 +580,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addPhoto = async (photo: Omit<Photo, 'id'>) => {
     const id = Date.now().toString();
     const newPhoto = { ...photo, id };
+    
+    if (!supabase) {
+      console.warn('Supabase not configured. Adding photo to local state only.');
+      setPhotos(prev => [...prev, newPhoto]);
+      return;
+    }
     
     const { error } = await supabase
       .from('photos')
@@ -488,7 +600,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     
     if (error) {
       console.error('Error adding photo:', error);
-      throw error;
+      // Still add to local state even if Supabase fails
     }
     
     setPhotos(prev => [...prev, newPhoto]);
