@@ -4,7 +4,7 @@ import BottomNav from './components/BottomNav';
 import TimelineView from './views/TimelineView';
 import DailyTasksView from './views/DailyTasksView';
 import PlansContractsView from './views/PlansContractsView';
-import PhotosReportsView from './views/PhotosReportsView';
+import DailyReportsView from './views/DailyReportsView';
 import AIAssistantView from './views/AIAssistantView';
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
       case 'plans':
         return <PlansContractsView />;
       case 'photos':
-        return <PhotosReportsView />;
+        return <DailyReportsView />;
       case 'ai':
         return <AIAssistantView />;
       default:

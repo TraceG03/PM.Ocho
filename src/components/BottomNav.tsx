@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, Calendar, CheckSquare, FileText, Camera, Bot } from 'lucide-react';
+import { List, Calendar, CheckSquare, FileText, ClipboardList, Bot } from 'lucide-react';
 
 interface BottomNavProps {
   currentView: string;
@@ -11,7 +11,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ currentView, onViewChange }) => {
     { id: 'timeline', label: 'Timeline', icon: List },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'plans', label: 'Plans', icon: FileText },
-    { id: 'photos', label: 'Photos', icon: Camera },
+    { id: 'photos', label: 'Reports', icon: ClipboardList },
     { id: 'ai', label: 'AI', icon: Bot },
   ];
 
