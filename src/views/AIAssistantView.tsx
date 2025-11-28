@@ -9,18 +9,8 @@ interface Message {
 }
 
 const AIAssistantView: React.FC = () => {
-  let context;
-  try {
-    context = useApp();
-  } catch (error) {
-    console.error('Error in AIAssistantView:', error);
-    return (
-      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-red-500">Error loading AI Assistant. Please refresh the page.</p>
-      </div>
-    );
-  }
-
+  const context = useApp();
+  
   const { 
     milestones = [], 
     addMilestone, 
@@ -30,8 +20,8 @@ const AIAssistantView: React.FC = () => {
     getFile 
   } = context || {};
 
-  // Safety check
-  if (!addMilestone || !uploadFile || !getFile) {
+  // Only show loading if context itself is missing
+  if (!context) {
     return (
       <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-gray-500">Loading...</p>

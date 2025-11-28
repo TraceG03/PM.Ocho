@@ -3,18 +3,8 @@ import { Plus, Eye, Trash2, X, Upload, FileText, File, Download, FileCheck } fro
 import { useApp } from '../context/AppContext';
 
 const PlansContractsView: React.FC = () => {
-  let context;
-  try {
-    context = useApp();
-  } catch (error) {
-    console.error('Error in PlansContractsView:', error);
-    return (
-      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-red-500">Error loading Plans & Contracts. Please refresh the page.</p>
-      </div>
-    );
-  }
-
+  const context = useApp();
+  
   const { 
     documents = [], 
     files = [], 
@@ -25,8 +15,8 @@ const PlansContractsView: React.FC = () => {
     updateDocumentText 
   } = context || {};
 
-  // Safety check
-  if (!addDocument || !deleteDocument || !uploadFile || !getFile) {
+  // Only show loading if context itself is missing
+  if (!context) {
     return (
       <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
         <p className="text-gray-500">Loading...</p>
