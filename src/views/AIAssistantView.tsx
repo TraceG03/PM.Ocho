@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bot, Send, Upload, FileText, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Bot, Send, Upload, FileText, Sparkles, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 interface Message {
@@ -9,7 +9,7 @@ interface Message {
 }
 
 const AIAssistantView: React.FC = () => {
-  const { milestones, addMilestone, phases } = useApp();
+  const { milestones, addMilestone, phases, uploadFile, getFile } = useApp();
   const [activeTab, setActiveTab] = useState<'chat' | 'extractor'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -21,6 +21,9 @@ const AIAssistantView: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [documentText, setDocumentText] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedChips = ['Timeline planning', 'Safety guidelines', 'Material estimates'];
 
@@ -51,9 +54,57 @@ const AIAssistantView: React.FC = () => {
     setInputText(chip);
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Check file type
+    const allowedTypes = ['text/plain', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+    if (!allowedTypes.includes(file.type) && !file.name.match(/\.(txt|pdf|doc|docx)$/i)) {
+      alert('Please upload a text, PDF, or Word document');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileId = await uploadFile(file);
+      setUploadedFile(fileId);
+      
+      // Try to extract text from the file
+      const fileData = getFile(fileId);
+      if (fileData) {
+        // For text files, read the content
+        if (file.type === 'text/plain') {
+          const response = await fetch(fileData.dataUrl);
+          const text = await response.text();
+          // Remove data URL prefix
+          const textContent = text.replace(/^data:text\/plain;base64,/, '');
+          try {
+            const decoded = atob(textContent);
+            setDocumentText(decoded);
+          } catch {
+            // If base64 decode fails, try direct text
+            setDocumentText(text);
+          }
+        } else {
+          // For PDF/DOC files, show a message
+          setDocumentText(`Document "${file.name}" uploaded. Please paste the content below or the AI will extract milestones from the file structure.`);
+        }
+      }
+    } catch (error) {
+      alert('Failed to upload file. Please try again.');
+      console.error('File upload error:', error);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleExtractMilestones = () => {
-    if (!documentText.trim()) {
-      alert('Please paste a document or schedule');
+    if (!documentText.trim() && !uploadedFile) {
+      alert('Please upload a document or paste text');
       return;
     }
 
@@ -243,11 +294,50 @@ const AIAssistantView: React.FC = () => {
         <div className="px-4 mt-4 space-y-4">
           <div className="bg-white rounded-3xl shadow-sm p-4">
             <h2 className="font-semibold text-gray-900 mb-3">Upload Document</h2>
-            <div className="border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center mb-4">
-              <Upload size={48} className="mx-auto text-gray-400 mb-2" />
-              <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
-              <p className="text-xs text-gray-400 mt-1">PDF, DOCX, TXT files</p>
-            </div>
+            
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileUpload}
+              className="hidden"
+              accept=".txt,.pdf,.doc,.docx"
+            />
+            
+            {!uploadedFile ? (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-8 text-center hover:border-accent-purple hover:bg-purple-50 transition-colors disabled:opacity-50"
+              >
+                <Upload size={48} className="mx-auto text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500">{uploading ? 'Uploading...' : 'Click to upload or drag and drop'}</p>
+                <p className="text-xs text-gray-400 mt-1">PDF, DOCX, TXT files</p>
+              </button>
+            ) : (
+              <div className="border-2 border-accent-purple rounded-2xl p-4 mb-4 bg-purple-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <FileText size={24} className="text-accent-purple" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {getFile(uploadedFile)?.name || 'Uploaded file'}
+                      </p>
+                      <p className="text-xs text-gray-500">File uploaded successfully</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setUploadedFile(null);
+                      setDocumentText('');
+                    }}
+                    className="p-2 text-gray-400 hover:text-red-500"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-700">
@@ -264,7 +354,7 @@ const AIAssistantView: React.FC = () => {
 
             <button
               onClick={handleExtractMilestones}
-              disabled={isExtracting || !documentText.trim()}
+              disabled={isExtracting || (!documentText.trim() && !uploadedFile)}
               className="w-full mt-4 bg-accent-purple text-white py-4 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {isExtracting ? (

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
-import { Camera, Image, Mail, Loader } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Camera, Image, Mail, Loader, X, Eye, Download } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 const PhotosReportsView: React.FC = () => {
-  const { addPhoto } = useApp();
+  const { photos, files, addPhoto, uploadFile, getFile, deleteFile } = useApp();
   const [email, setEmail] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [caption, setCaption] = useState('');
@@ -11,29 +11,66 @@ const PhotosReportsView: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileUpload = async (file: File, source: 'camera' | 'library') => {
+    // Check if it's an image
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileId = await uploadFile(file);
+      const imageUrl = getFile(fileId)?.dataUrl;
+      
+      addPhoto({
+        caption: caption || file.name,
+        date: selectedDate,
+        source,
+        fileId,
+        imageUrl,
+      });
+      
+      setCaption('');
+      setShowToast(true);
+      setToastMessage(`Photo uploaded successfully!`);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (error) {
+      alert('Failed to upload photo. Please try again.');
+      console.error('Photo upload error:', error);
+    } finally {
+      setUploading(false);
+      // Reset inputs
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      if (libraryInputRef.current) libraryInputRef.current.value = '';
+    }
+  };
 
   const handleTakePhoto = () => {
-    // Simulate photo capture
-    const photo = {
-      caption: caption || 'Photo',
-      date: selectedDate,
-      source: 'camera' as const,
-    };
-    addPhoto(photo);
-    setCaption('');
-    alert('Photo captured! (Simulated)');
+    cameraInputRef.current?.click();
   };
 
   const handleFromLibrary = () => {
-    // Simulate library selection
-    const photo = {
-      caption: caption || 'Photo from library',
-      date: selectedDate,
-      source: 'library' as const,
-    };
-    addPhoto(photo);
-    setCaption('');
-    alert('Photo selected from library! (Simulated)');
+    libraryInputRef.current?.click();
+  };
+
+  const handleCameraFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'camera');
+    }
+  };
+
+  const handleLibraryFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, 'library');
+    }
   };
 
   const handleGenerateReport = () => {
@@ -55,6 +92,9 @@ const PhotosReportsView: React.FC = () => {
       }, 3000);
     }, 2000);
   };
+
+  const selectedPhoto = photos.find(p => p.id === viewingPhoto);
+  const photoFile = selectedPhoto?.fileId ? getFile(selectedPhoto.fileId) : null;
 
   return (
     <div className="pb-20 min-h-screen bg-gray-50">
@@ -94,31 +134,91 @@ const PhotosReportsView: React.FC = () => {
       <div className="px-4 mt-4">
         <div className="bg-white rounded-3xl shadow-sm p-4">
           <h2 className="font-semibold text-gray-900 mb-3">Add Photos</h2>
+          
+          {/* Hidden file inputs */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleCameraFileSelect}
+            className="hidden"
+          />
+          <input
+            ref={libraryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLibraryFileSelect}
+            className="hidden"
+          />
+
           <div className="grid grid-cols-2 gap-3 mb-3">
             <button
               onClick={handleTakePhoto}
-              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-accent-purple hover:bg-purple-50 transition-colors"
+              disabled={uploading}
+              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-accent-purple hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Camera size={32} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">Take Photo</span>
+              <span className="text-sm font-medium text-gray-700">
+                {uploading ? 'Uploading...' : 'Take Photo'}
+              </span>
             </button>
             <button
               onClick={handleFromLibrary}
-              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-accent-purple hover:bg-purple-50 transition-colors"
+              disabled={uploading}
+              className="flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-gray-300 hover:border-accent-purple hover:bg-purple-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Image size={32} className="text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">From Library</span>
+              <span className="text-sm font-medium text-gray-700">
+                {uploading ? 'Uploading...' : 'From Library'}
+              </span>
             </button>
           </div>
           <input
             type="text"
-            placeholder="Caption"
+            placeholder="Caption (optional)"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
           />
         </div>
       </div>
+
+      {/* Photo Gallery */}
+      {photos.length > 0 && (
+        <div className="px-4 mt-4">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Uploaded Photos</h2>
+          <div className="grid grid-cols-3 gap-2">
+            {photos.map((photo) => (
+              <div
+                key={photo.id}
+                className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden group cursor-pointer"
+                onClick={() => setViewingPhoto(photo.id)}
+              >
+                {photo.imageUrl ? (
+                  <img
+                    src={photo.imageUrl}
+                    alt={photo.caption}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Image size={32} className="text-gray-400" />
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+                  <Eye size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                {photo.caption && (
+                  <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs p-2 truncate">
+                    {photo.caption}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Report Generation */}
       <div className="px-4 mt-4">
@@ -177,9 +277,56 @@ const PhotosReportsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Photo Viewer Modal */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{selectedPhoto.caption || 'Photo'}</h3>
+                <p className="text-sm text-gray-500">
+                  {new Date(selectedPhoto.date).toLocaleDateString()} • {selectedPhoto.source === 'camera' ? 'Camera' : 'Library'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {photoFile && (
+                  <a
+                    href={photoFile.dataUrl}
+                    download={photoFile.name}
+                    className="p-2 text-gray-400 hover:text-blue-500"
+                    title="Download"
+                  >
+                    <Download size={20} />
+                  </a>
+                )}
+                <button
+                  onClick={() => setViewingPhoto(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4 bg-gray-50 flex items-center justify-center">
+              {selectedPhoto.imageUrl ? (
+                <img
+                  src={selectedPhoto.imageUrl}
+                  alt={selectedPhoto.caption}
+                  className="max-w-full max-h-full rounded-lg shadow-lg"
+                />
+              ) : (
+                <div className="text-center text-gray-500">
+                  <Image size={64} className="mx-auto mb-4 opacity-50" />
+                  <p>Image not available</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default PhotosReportsView;
-

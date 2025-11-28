@@ -28,13 +28,22 @@ export interface Task {
   relatedDocumentId?: string;
 }
 
+export interface UploadedFile {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string; // Base64 data URL for preview
+  uploadedAt: string;
+}
+
 export interface Note {
   id: string;
   type: 'Plan Detail' | 'Spec';
   refNumber: string;
   title: string;
   details: string;
-  fileName?: string;
+  fileId?: string; // Reference to uploaded file
 }
 
 export interface Photo {
@@ -42,6 +51,8 @@ export interface Photo {
   caption: string;
   date: string;
   source: 'camera' | 'library';
+  fileId?: string; // Reference to uploaded file
+  imageUrl?: string; // Data URL for image preview
 }
 
 interface AppContextType {
@@ -50,6 +61,7 @@ interface AppContextType {
   tasks: Task[];
   notes: Note[];
   photos: Photo[];
+  files: UploadedFile[];
   addPhase: (phase: Omit<Phase, 'id'>) => void;
   updatePhase: (id: string, phase: Partial<Phase>) => void;
   deletePhase: (id: string) => void;
@@ -62,6 +74,9 @@ interface AppContextType {
   addNote: (note: Omit<Note, 'id'>) => void;
   deleteNote: (id: string) => void;
   addPhoto: (photo: Omit<Photo, 'id'>) => void;
+  uploadFile: (file: File) => Promise<string>; // Returns file ID
+  getFile: (fileId: string) => UploadedFile | undefined;
+  deleteFile: (fileId: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -124,6 +139,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [notes, setNotes] = useState<Note[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
 
   const addPhase = (phase: Omit<Phase, 'id'>) => {
     setPhases([...phases, { ...phase, id: Date.now().toString() }]);
@@ -173,6 +189,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setPhotos([...photos, { ...photo, id: Date.now().toString() }]);
   };
 
+  const uploadFile = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        const fileId = Date.now().toString();
+        const uploadedFile: UploadedFile = {
+          id: fileId,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          dataUrl,
+          uploadedAt: new Date().toISOString(),
+        };
+        setFiles([...files, uploadedFile]);
+        resolve(fileId);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const getFile = (fileId: string): UploadedFile | undefined => {
+    return files.find(f => f.id === fileId);
+  };
+
+  const deleteFile = (fileId: string) => {
+    setFiles(files.filter(f => f.id !== fileId));
+    // Also remove file references from notes and photos
+    setNotes(notes.map(n => n.fileId === fileId ? { ...n, fileId: undefined } : n));
+    setPhotos(photos.map(p => p.fileId === fileId ? { ...p, fileId: undefined, imageUrl: undefined } : p));
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -181,6 +230,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         tasks,
         notes,
         photos,
+        files,
         addPhase,
         updatePhase,
         deletePhase,
@@ -193,6 +243,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addNote,
         deleteNote,
         addPhoto,
+        uploadFile,
+        getFile,
+        deleteFile,
       }}
     >
       {children}
