@@ -1,67 +1,22 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.cursor/
-
-# Environment variables
+node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
 .env
 .env.local
-.env.production
 
-# System directories (Windows user profile)
-AppData/
-Application Data/
-Contacts/
-Cookies/
-Documents/
-Downloads/
-Favorites/
-Links/
-Local Settings/
-My Documents/
-Music/
-NetHood/
-OneDrive/
-PrintHood/
-Recent/
-Saved Games/
-Searches/
-SendTo/
-Start Menu/
-Templates/
-Videos/
-*.DAT
-*.LOG*
-*.ini
-NTUSER.*
+# macOS
+.DS_Store
 
-# Other project files
-.expo/
-src/navigation/
-src/screens/
-src/store/
-My project/
-curseforge/
-insta360/
-source/
+# IDE
+.vscode/
+.idea/
+
