@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, List, Settings, Plus, Edit, Trash2, X } from 'lucide-react';
-import { useApp, presetColors } from '../context/AppContext';
+import { useApp } from '../context/AppContextSupabase';
+import { presetColors } from '../context/AppContext';
 
 const TimelineView: React.FC = () => {
   const {
@@ -28,30 +29,40 @@ const TimelineView: React.FC = () => {
     notes: '',
   });
 
-  const handleAddPhase = () => {
+  const handleAddPhase = async () => {
     if (newPhaseName.trim()) {
-      if (editingPhase) {
-        updatePhase(editingPhase, { name: newPhaseName, color: newPhaseColor });
-        setEditingPhase(null);
-      } else {
-        addPhase({ name: newPhaseName, color: newPhaseColor });
+      try {
+        if (editingPhase) {
+          await updatePhase(editingPhase, { name: newPhaseName, color: newPhaseColor });
+          setEditingPhase(null);
+        } else {
+          await addPhase({ name: newPhaseName, color: newPhaseColor });
+        }
+        setNewPhaseName('');
+        setNewPhaseColor(presetColors[0]);
+      } catch (error) {
+        console.error('Error saving phase:', error);
+        alert('Failed to save phase. Please try again.');
       }
-      setNewPhaseName('');
-      setNewPhaseColor(presetColors[0]);
     }
   };
 
-  const handleSaveMilestone = () => {
+  const handleSaveMilestone = async () => {
     if (milestoneForm.title && milestoneForm.startDate && milestoneForm.endDate && milestoneForm.phaseId) {
-      addMilestone(milestoneForm);
-      setMilestoneForm({
-        title: '',
-        startDate: '',
-        endDate: '',
-        phaseId: phases[0]?.id || '',
-        notes: '',
-      });
-      setShowAddMilestone(false);
+      try {
+        await addMilestone(milestoneForm);
+        setMilestoneForm({
+          title: '',
+          startDate: '',
+          endDate: '',
+          phaseId: phases[0]?.id || '',
+          notes: '',
+        });
+        setShowAddMilestone(false);
+      } catch (error) {
+        console.error('Error saving milestone:', error);
+        alert('Failed to save milestone. Please try again.');
+      }
     }
   };
 
@@ -212,7 +223,6 @@ const TimelineView: React.FC = () => {
                 <div className="flex gap-2 ml-2">
                   <button
                     onClick={() => {
-                      updateMilestone(milestone.id, { ...milestone });
                       setMilestoneForm(milestone);
                       setShowAddMilestone(true);
                     }}
@@ -221,7 +231,14 @@ const TimelineView: React.FC = () => {
                     <Edit size={18} />
                   </button>
                   <button
-                    onClick={() => deleteMilestone(milestone.id)}
+                    onClick={async () => {
+                      try {
+                        await deleteMilestone(milestone.id);
+                      } catch (error) {
+                        console.error('Error deleting milestone:', error);
+                        alert('Failed to delete milestone. Please try again.');
+                      }
+                    }}
                     className="p-2 text-gray-400 hover:text-red-500"
                   >
                     <Trash2 size={18} />
@@ -406,7 +423,14 @@ const TimelineView: React.FC = () => {
                           <Edit size={18} />
                         </button>
                         <button
-                          onClick={() => deletePhase(phase.id)}
+                          onClick={async () => {
+                            try {
+                              await deletePhase(phase.id);
+                            } catch (error) {
+                              console.error('Error deleting phase:', error);
+                              alert('Failed to delete phase. Please try again.');
+                            }
+                          }}
                           className="p-2 text-gray-400 hover:text-red-500"
                         >
                           <Trash2 size={18} />

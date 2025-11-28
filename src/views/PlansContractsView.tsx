@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Eye, Trash2, X, Upload, FileText, File, Download, FileCheck } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextSupabase';
 
 const PlansContractsView: React.FC = () => {
   const context = useApp();
@@ -40,9 +40,8 @@ const PlansContractsView: React.FC = () => {
 
     setUploading(true);
     try {
-      // Upload the file
-      const fileId = await uploadFile(file);
-      const uploadedFile = getFile(fileId);
+      // Upload the file - now returns the file object directly
+      const uploadedFile = await uploadFile(file);
       
       if (!uploadedFile) {
         throw new Error('File upload failed');
@@ -78,11 +77,11 @@ const PlansContractsView: React.FC = () => {
 
       // Create document
       const documentId = Date.now().toString();
-      addDocument({
+      await addDocument({
         type: documentForm.type,
         title: documentForm.title || file.name,
         description: documentForm.description,
-        fileId,
+        fileId: uploadedFile.id,
         textContent,
       });
 
@@ -254,7 +253,14 @@ const PlansContractsView: React.FC = () => {
                         <Eye size={18} />
                       </button>
                       <button
-                        onClick={() => deleteDocument(document.id)}
+                        onClick={async () => {
+                          try {
+                            await deleteDocument(document.id);
+                          } catch (error) {
+                            console.error('Error deleting document:', error);
+                            alert('Failed to delete document. Please try again.');
+                          }
+                        }}
                         className="p-2 text-gray-400 hover:text-red-500"
                         title="Delete"
                       >

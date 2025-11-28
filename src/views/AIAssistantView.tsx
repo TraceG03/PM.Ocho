@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Bot, Send, Upload, FileText, Sparkles, X } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextSupabase';
 
 interface Message {
   id: string;

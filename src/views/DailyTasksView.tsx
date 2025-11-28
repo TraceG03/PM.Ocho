@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Check, X } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextSupabase';
 
 interface QuickTodo {
   id: string;

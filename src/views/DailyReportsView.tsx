@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { FileText, Mail, Loader, Bot, Sparkles, Copy, Check } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useApp } from '../context/AppContextSupabase';
 
 const DailyReportsView: React.FC = () => {
   const { tasks, milestones, documents, photos } = useApp();
