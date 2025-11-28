@@ -9,12 +9,12 @@ interface Message {
 }
 
 const AIAssistantView: React.FC = () => {
-  const { milestones, addMilestone, phases, uploadFile, getFile } = useApp();
+  const { milestones, addMilestone, phases, documents, uploadFile, getFile } = useApp();
   const [activeTab, setActiveTab] = useState<'chat' | 'extractor'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
-      text: "Hello! I'm your AI construction site assistant. How can I help you today?",
+      text: "Hello! I'm your AI construction site assistant. I can help you with questions about your uploaded plans and contracts, timeline planning, safety guidelines, and material estimates. How can I help you today?",
       sender: 'assistant',
     },
   ]);
@@ -23,12 +23,111 @@ const AIAssistantView: React.FC = () => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const suggestedChips = ['Timeline planning', 'Safety guidelines', 'Material estimates'];
 
+  // Enhanced function to search through documents for relevant information
+  const searchDocuments = (query: string): string => {
+    if (documents.length === 0) {
+      return `I don't have any documents uploaded yet. Please upload plans or contracts in the Plans & Contracts tab, and then I'll be able to answer questions about them.`;
+    }
+
+    const queryLower = query.toLowerCase();
+    const queryWords = queryLower.split(/\s+/).filter(w => w.length > 2);
+    const relevantDocs: Array<{ title: string; type: string; snippets: string[]; score: number }> = [];
+
+    documents.forEach((doc) => {
+      if (!doc.textContent) return;
+
+      const textLower = doc.textContent.toLowerCase();
+      const titleLower = doc.title.toLowerCase();
+      let score = 0;
+      const snippets: string[] = [];
+
+      // Check title match (higher weight)
+      if (titleLower.includes(queryLower)) {
+        score += 10;
+      }
+      queryWords.forEach(word => {
+        if (titleLower.includes(word)) score += 3;
+      });
+
+      // Check content match
+      if (textLower.includes(queryLower)) {
+        score += 5;
+        // Extract context around the match
+        const index = textLower.indexOf(queryLower);
+        const start = Math.max(0, index - 100);
+        const end = Math.min(textLower.length, index + queryLower.length + 100);
+        const context = doc.textContent.substring(start, end).trim();
+        if (context.length > 0) {
+          snippets.push(context);
+        }
+      }
+
+      // Check for individual word matches
+      queryWords.forEach(word => {
+        if (textLower.includes(word)) {
+          score += 1;
+          // Find sentences containing the word
+          const sentences = doc.textContent.split(/[.!?\n]+/);
+          const matchingSentences = sentences
+            .filter(s => s.toLowerCase().includes(word))
+            .slice(0, 2);
+          matchingSentences.forEach(s => {
+            if (!snippets.includes(s.trim())) {
+              snippets.push(s.trim());
+            }
+          });
+        }
+      });
+
+      // Check document type
+      if (queryLower.includes('plan') && doc.type === 'Plan') score += 2;
+      if (queryLower.includes('contract') && doc.type === 'Contract') score += 2;
+
+      if (score > 0) {
+        relevantDocs.push({
+          title: doc.title,
+          type: doc.type,
+          snippets: snippets.slice(0, 3), // Limit to 3 snippets
+          score
+        });
+      }
+    });
+
+    // Sort by relevance score
+    relevantDocs.sort((a, b) => b.score - a.score);
+
+    if (relevantDocs.length > 0) {
+      const topDocs = relevantDocs.slice(0, 3); // Top 3 most relevant
+      let response = `I found relevant information in ${relevantDocs.length} document(s):\n\n`;
+      
+      topDocs.forEach((doc, index) => {
+        response += `${index + 1}. **${doc.title}** (${doc.type})\n`;
+        if (doc.snippets.length > 0) {
+          response += `   ${doc.snippets[0]}\n`;
+        }
+        response += `\n`;
+      });
+
+      if (relevantDocs.length > 3) {
+        response += `\nAnd ${relevantDocs.length - 3} more document(s) may contain relevant information.`;
+      }
+
+      response += `\n\nWould you like me to search for something more specific?`;
+      return response;
+    }
+
+    // If no matches, suggest available documents
+    const docList = documents.map(d => `${d.title} (${d.type})`).join(', ');
+    return `I couldn't find specific information about "${query}" in the uploaded documents.\n\nI have access to ${documents.length} document(s): ${docList}\n\nTry asking about:\n- Specific document titles\n- Information that might be in plans or contracts\n- Or upload more documents with the information you need`;
+  };
+
   const handleSendMessage = () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isProcessing) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -37,17 +136,46 @@ const AIAssistantView: React.FC = () => {
     };
 
     setMessages([...messages, userMessage]);
+    const currentQuery = inputText;
     setInputText('');
+    setIsProcessing(true);
 
-    // Simulate AI response
+    // Process the query and search documents
     setTimeout(() => {
+      let response = '';
+      
+      // Check if query is about documents
+      const documentKeywords = ['document', 'plan', 'contract', 'specification', 'spec', 'detail', 'upload', 'file', 'what does', 'tell me about', 'information about', 'what is in'];
+      const isDocumentQuery = documentKeywords.some(keyword => 
+        currentQuery.toLowerCase().includes(keyword)
+      ) || documents.length > 0;
+
+      if (isDocumentQuery && documents.length > 0) {
+        // Search through documents
+        response = searchDocuments(currentQuery);
+      } else if (currentQuery.toLowerCase().includes('timeline') || currentQuery.toLowerCase().includes('schedule')) {
+        response = `I can help with timeline planning. You currently have ${milestones.length} milestone(s) in your timeline. Would you like me to help create new milestones or analyze your existing timeline?`;
+      } else if (currentQuery.toLowerCase().includes('safety')) {
+        response = `Here are some general construction safety guidelines:\n\n1. Always wear appropriate PPE (hard hat, safety glasses, steel-toed boots)\n2. Follow proper lockout/tagout procedures\n3. Maintain clear work areas and proper signage\n4. Conduct regular safety inspections\n5. Ensure all workers are properly trained\n\nFor project-specific safety requirements, please check your uploaded plans and contracts.`;
+      } else if (currentQuery.toLowerCase().includes('material') || currentQuery.toLowerCase().includes('estimate')) {
+        response = `I can help with material estimates. To provide accurate estimates, I would need:\n- Project dimensions and specifications\n- Material types and grades\n- Quantity requirements\n\nThis information is typically found in your project plans. Would you like me to search through your uploaded documents for material specifications?`;
+      } else {
+        // General response
+        if (documents.length > 0) {
+          response = `I understand you're asking about: "${currentQuery}". I have access to ${documents.length} document(s) that might contain relevant information. Let me search through them...\n\n${searchDocuments(currentQuery)}`;
+        } else {
+          response = `I understand you're asking about: "${currentQuery}". I can help with timeline planning, safety guidelines, and material estimates. To answer questions about your specific project, please upload your plans and contracts in the Plans & Contracts tab.`;
+        }
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I understand you're asking about: " + inputText + ". Here's some helpful information...",
+        text: response,
         sender: 'assistant',
       };
       setMessages((prev) => [...prev, assistantMessage]);
-    }, 1000);
+      setIsProcessing(false);
+    }, 1500);
   };
 
   const handleSuggestedChip = (chip: string) => {
@@ -248,6 +376,22 @@ const AIAssistantView: React.FC = () => {
               </div>
             ))}
 
+            {/* Available Documents Info */}
+            {documents.length > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 mx-2 mb-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText size={16} className="text-blue-600" />
+                  <p className="text-xs font-medium text-blue-900">
+                    {documents.length} document(s) available for questions
+                  </p>
+                </div>
+                <p className="text-xs text-blue-700">
+                  Ask me about: {documents.slice(0, 3).map(d => d.title).join(', ')}
+                  {documents.length > 3 && ` and ${documents.length - 3} more`}
+                </p>
+              </div>
+            )}
+
             {/* Suggested Chips */}
             {messages.length === 1 && (
               <div className="space-y-2">
@@ -280,9 +424,14 @@ const AIAssistantView: React.FC = () => {
               />
               <button
                 onClick={handleSendMessage}
-                className="bg-accent-purple text-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+                disabled={isProcessing}
+                className="bg-accent-purple text-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Send size={20} />
+                {isProcessing ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Send size={20} />
+                )}
               </button>
             </div>
           </div>
