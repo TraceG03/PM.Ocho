@@ -1,18 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Check, X } from 'lucide-react';
-import { useApp } from '../context/AppContextSupabase';
-
-interface QuickTodo {
-  id: string;
-  text: string;
-  completed: boolean;
-}
+import { Plus, Check, Trash2 } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 const DailyTasksView: React.FC = () => {
   const { tasks, milestones, documents, addTask, updateTask, deleteTask } = useApp();
-  const [quickTodos, setQuickTodos] = useState<QuickTodo[]>([]);
-  const [quickTodoInput, setQuickTodoInput] = useState('');
   const [showAddTask, setShowAddTask] = useState(false);
+  const [quickTodo, setQuickTodo] = useState('');
   const [taskForm, setTaskForm] = useState({
     name: '',
     date: new Date().toISOString().split('T')[0],
@@ -24,77 +17,79 @@ const DailyTasksView: React.FC = () => {
     relatedDocumentId: '',
   });
 
-  const categories = ['General', 'Plumbing', 'Electrical', 'HVAC', 'Framing', 'Finishing'];
-
-  const handleAddQuickTodo = () => {
-    if (quickTodoInput.trim()) {
-      setQuickTodos([
-        ...quickTodos,
-        { id: Date.now().toString(), text: quickTodoInput, completed: false },
-      ]);
-      setQuickTodoInput('');
+  const handleAddQuickTodo = async () => {
+    if (quickTodo.trim()) {
+      try {
+        await addTask({
+          name: quickTodo,
+          date: new Date().toISOString().split('T')[0],
+          category: 'Quick',
+          priority: 'Normal',
+          crew: '',
+          notes: '',
+          completed: false,
+        });
+        setQuickTodo('');
+      } catch (error) {
+        console.error('Error adding quick todo:', error);
+      }
     }
   };
 
-  const toggleQuickTodo = (id: string) => {
-    setQuickTodos(quickTodos.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  };
-
-  const deleteQuickTodo = (id: string) => {
-    setQuickTodos(quickTodos.filter(t => t.id !== id));
-  };
-
-  const handleSaveTask = () => {
-    if (taskForm.name && taskForm.date) {
-      addTask({
-        ...taskForm,
-        relatedMilestoneId: taskForm.relatedMilestoneId || undefined,
-        relatedDocumentId: taskForm.relatedDocumentId || undefined,
-      });
-      setTaskForm({
-        name: '',
-        date: new Date().toISOString().split('T')[0],
-        category: 'General',
-        priority: 'Normal',
-        crew: '',
-        notes: '',
-        relatedMilestoneId: '',
-        relatedDocumentId: '',
-      });
-      setShowAddTask(false);
+  const handleSaveTask = async () => {
+    if (taskForm.name.trim()) {
+      try {
+        await addTask({
+          ...taskForm,
+          completed: false,
+        });
+        setTaskForm({
+          name: '',
+          date: new Date().toISOString().split('T')[0],
+          category: 'General',
+          priority: 'Normal',
+          crew: '',
+          notes: '',
+          relatedMilestoneId: '',
+          relatedDocumentId: '',
+        });
+        setShowAddTask(false);
+      } catch (error) {
+        console.error('Error saving task:', error);
+        alert('Failed to save task. Please try again.');
+      }
     }
   };
 
-  const toggleTaskComplete = (id: string) => {
-    const task = tasks.find(t => t.id === id);
-    if (task) {
-      updateTask(id, { completed: !task.completed });
+  const handleToggleComplete = async (id: string, completed: boolean) => {
+    try {
+      await updateTask(id, { completed: !completed });
+    } catch (error) {
+      console.error('Error updating task:', error);
     }
   };
 
-  // Group tasks by date
   const groupedTasks = tasks.reduce((acc, task) => {
     const date = task.date;
-    if (!acc[date]) {
-      acc[date] = [];
-    }
+    if (!acc[date]) acc[date] = [];
     acc[date].push(task);
     return acc;
   }, {} as Record<string, typeof tasks>);
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+  const sortedDates = Object.keys(groupedTasks).sort((a, b) => 
+    new Date(b).getTime() - new Date(a).getTime()
+  );
 
-    if (date.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const taskDate = new Date(date);
+    taskDate.setHours(0, 0, 0, 0);
+
+    if (taskDate.getTime() === today.getTime()) return 'Today';
+    if (taskDate.getTime() === today.getTime() - 86400000) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   return (
@@ -107,55 +102,24 @@ const DailyTasksView: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick To-Do List */}
+      {/* Quick To-Do */}
       <div className="px-4 mt-4">
         <div className="bg-white rounded-3xl shadow-sm p-4">
-          <h2 className="font-semibold text-gray-900 mb-3">Quick To-Do List</h2>
-          <div className="flex gap-2 mb-3">
+          <div className="flex gap-2">
             <input
               type="text"
               placeholder="Add quick to-do item..."
-              value={quickTodoInput}
-              onChange={(e) => setQuickTodoInput(e.target.value)}
+              value={quickTodo}
+              onChange={(e) => setQuickTodo(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleAddQuickTodo()}
-              className="flex-1 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
             />
             <button
               onClick={handleAddQuickTodo}
-              className="bg-accent-purple text-white p-2 rounded-xl shadow-sm hover:shadow-md transition-shadow"
+              className="bg-accent-purple text-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             >
               <Plus size={20} />
             </button>
-          </div>
-          <div className="space-y-2">
-            {quickTodos.map((todo) => (
-              <div
-                key={todo.id}
-                className="flex items-center gap-3 p-2 rounded-xl hover:bg-gray-50"
-              >
-                <button
-                  onClick={() => toggleQuickTodo(todo.id)}
-                  className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center ${
-                    todo.completed
-                      ? 'bg-accent-purple border-accent-purple'
-                      : 'border-gray-300'
-                  }`}
-                >
-                  {todo.completed && <Check size={14} className="text-white" />}
-                </button>
-                <span
-                  className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}
-                >
-                  {todo.text}
-                </span>
-                <button
-                  onClick={() => deleteQuickTodo(todo.id)}
-                  className="p-1 text-gray-400 hover:text-red-500"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -180,66 +144,39 @@ const DailyTasksView: React.FC = () => {
                 onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
               />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="date"
-                  value={taskForm.date}
-                  onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })}
-                  className="px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-                />
-                <select
-                  value={taskForm.category}
-                  onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
-                  className="px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <select
-                  value={taskForm.priority}
-                  onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as 'Normal' | 'High' })}
-                  className="px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-                >
-                  <option value="Normal">Normal</option>
-                  <option value="High">High</option>
-                </select>
-                <input
-                  type="text"
-                  placeholder="Crew/Person"
-                  value={taskForm.crew}
-                  onChange={(e) => setTaskForm({ ...taskForm, crew: e.target.value })}
-                  className="px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-                />
-              </div>
+              <input
+                type="date"
+                value={taskForm.date}
+                onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              />
               <select
-                value={taskForm.relatedMilestoneId}
-                onChange={(e) => setTaskForm({ ...taskForm, relatedMilestoneId: e.target.value })}
+                value={taskForm.category}
+                onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
               >
-                <option value="">Related Milestone (Optional)</option>
-                {milestones.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.title}
-                  </option>
-                ))}
+                <option value="General">General</option>
+                <option value="Plumbing">Plumbing</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Framing">Framing</option>
+                <option value="Concrete">Concrete</option>
+                <option value="Roofing">Roofing</option>
               </select>
               <select
-                value={taskForm.relatedDocumentId}
-                onChange={(e) => setTaskForm({ ...taskForm, relatedDocumentId: e.target.value })}
+                value={taskForm.priority}
+                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as 'Normal' | 'High' })}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
               >
-                <option value="">Related Document (Optional)</option>
-                {documents.map((doc) => (
-                  <option key={doc.id} value={doc.id}>
-                    {doc.title}
-                  </option>
-                ))}
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
               </select>
+              <input
+                type="text"
+                placeholder="Crew/Person"
+                value={taskForm.crew}
+                onChange={(e) => setTaskForm({ ...taskForm, crew: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              />
               <textarea
                 placeholder="Notes"
                 value={taskForm.notes}
@@ -247,6 +184,26 @@ const DailyTasksView: React.FC = () => {
                 rows={3}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple resize-none"
               />
+              <select
+                value={taskForm.relatedMilestoneId}
+                onChange={(e) => setTaskForm({ ...taskForm, relatedMilestoneId: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              >
+                <option value="">Related Milestone (optional)</option>
+                {milestones.map(m => (
+                  <option key={m.id} value={m.id}>{m.title}</option>
+                ))}
+              </select>
+              <select
+                value={taskForm.relatedDocumentId}
+                onChange={(e) => setTaskForm({ ...taskForm, relatedDocumentId: e.target.value })}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              >
+                <option value="">Related Document (optional)</option>
+                {documents.map(d => (
+                  <option key={d.id} value={d.id}>{d.title}</option>
+                ))}
+              </select>
               <button
                 onClick={handleSaveTask}
                 className="w-full bg-accent-purple text-white py-3 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow"
@@ -258,73 +215,77 @@ const DailyTasksView: React.FC = () => {
         </div>
       </div>
 
-      {/* Task List */}
+      {/* Tasks List */}
       <div className="px-4 mt-4 space-y-4">
-        {Object.entries(groupedTasks)
-          .sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
-          .map(([date, dateTasks]) => (
-            <div key={date}>
-              <h3 className="text-sm font-semibold text-gray-700 mb-2 px-2">{formatDate(date)}</h3>
-              <div className="space-y-2">
-                {dateTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={`bg-white rounded-3xl shadow-sm p-4 ${
-                      task.completed ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => toggleTaskComplete(task.id)}
-                        className={`mt-1 w-6 h-6 rounded-lg border-2 flex items-center justify-center flex-shrink-0 ${
-                          task.completed
-                            ? 'bg-accent-purple border-accent-purple'
-                            : 'border-gray-300'
-                        }`}
-                      >
-                        {task.completed && <Check size={14} className="text-white" />}
-                      </button>
-                      <div className="flex-1">
-                        <h4
-                          className={`font-semibold text-gray-900 ${
-                            task.completed ? 'line-through' : ''
-                          }`}
-                        >
+        {sortedDates.map(date => (
+          <div key={date}>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">{formatDate(date)}</h2>
+            <div className="space-y-3">
+              {groupedTasks[date].map(task => (
+                <div
+                  key={task.id}
+                  className={`bg-white rounded-3xl shadow-sm p-4 border-l-4 ${
+                    task.completed ? 'opacity-60' : ''
+                  }`}
+                  style={{ borderLeftColor: task.priority === 'High' ? '#ef4444' : '#3b82f6' }}
+                >
+                  <div className="flex items-start gap-3">
+                    <button
+                      onClick={() => handleToggleComplete(task.id, task.completed)}
+                      className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                        task.completed
+                          ? 'bg-accent-purple border-accent-purple'
+                          : 'border-gray-300'
+                      }`}
+                    >
+                      {task.completed && <Check size={14} className="text-white" />}
+                    </button>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className={`font-semibold ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                           {task.name}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          {task.priority === 'High' && (
-                            <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                              High Priority
-                            </span>
-                          )}
-                          <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                            {task.category}
+                        </h3>
+                        {task.priority === 'High' && (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                            High
                           </span>
-                          {task.crew && (
-                            <span className="text-sm text-gray-600">👤 {task.crew}</span>
-                          )}
-                        </div>
-                        {task.notes && (
-                          <p className="text-sm text-gray-600 mt-2">{task.notes}</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => deleteTask(task.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 flex-shrink-0"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center gap-3 text-sm text-gray-600">
+                        <span>{task.category}</span>
+                        {task.crew && <span>• {task.crew}</span>}
+                      </div>
+                      {task.notes && (
+                        <p className="text-sm text-gray-600 mt-2">{task.notes}</p>
+                      )}
                     </div>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await deleteTask(task.id);
+                        } catch (error) {
+                          console.error('Error deleting task:', error);
+                          alert('Failed to delete task. Please try again.');
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        ))}
+        {tasks.length === 0 && (
+          <div className="bg-white rounded-3xl shadow-sm p-8 text-center">
+            <p className="text-gray-500">No tasks yet. Add your first task above!</p>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default DailyTasksView;
-

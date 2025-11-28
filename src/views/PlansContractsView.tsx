@@ -1,58 +1,31 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Eye, Trash2, X, Upload, FileText, File, Download, FileCheck } from 'lucide-react';
-import { useApp } from '../context/AppContextSupabase';
+import { Plus, Eye, Trash2, X, Upload, FileText, File, Download } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 const PlansContractsView: React.FC = () => {
-  const context = useApp();
+  const { documents, addDocument, deleteDocument, uploadFile, getFile } = useApp();
   
-  const { 
-    documents = [], 
-    files = [], 
-    addDocument, 
-    deleteDocument, 
-    uploadFile, 
-    getFile, 
-    updateDocumentText 
-  } = context || {};
-
-  // Only show loading if context itself is missing
-  if (!context) {
-    return (
-      <div className="pb-20 min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Loading...</p>
-      </div>
-    );
-  }
-
   const [showUpload, setShowUpload] = useState(false);
   const [viewingDocument, setViewingDocument] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [documentForm, setDocumentForm] = useState({
     type: 'Plan' as 'Plan' | 'Contract',
     title: '',
     description: '',
   });
-  const [uploading, setUploading] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processFile = async (file: File) => {
     if (!file) return;
 
-    // Accept any file type
-
     setUploading(true);
     try {
-      // Upload the file - now returns the file object directly
       const uploadedFile = await uploadFile(file);
       
-      if (!uploadedFile) {
-        throw new Error('File upload failed');
-      }
-
       // Extract text content for AI access
       let textContent = '';
       if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
-        // For text files, try to read the content
         try {
           const reader = new FileReader();
           textContent = await new Promise<string>((resolve, reject) => {
@@ -61,22 +34,17 @@ const PlansContractsView: React.FC = () => {
             reader.readAsText(file);
           });
         } catch (error) {
-          textContent = `Text Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}`;
+          textContent = `Text Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}`;
         }
       } else if (file.type.includes('pdf') || file.name.endsWith('.pdf')) {
-        // For PDFs, store metadata
-        textContent = `PDF Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[PDF content extraction: The document "${file.name}" has been uploaded. While full text extraction from PDFs requires additional libraries, you can ask me questions about this document and I'll reference it by name and metadata. For full text search, consider uploading the document content as a text file or using a PDF-to-text converter.]`;
+        textContent = `PDF Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[PDF content extraction: The document "${file.name}" has been uploaded. While full text extraction from PDFs requires additional libraries, you can ask me questions about this document and I'll reference it by name and metadata.]`;
       } else if (file.type.includes('image') || /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i.test(file.name)) {
-        // For images, store metadata
-        textContent = `Image Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[This is an image file. You can view it in the document viewer. For text-based questions, please upload text or PDF documents.]`;
+        textContent = `Image Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\n\n[This is an image file. You can view it in the document viewer.]`;
       } else {
-        // For all other file types, store metadata
-        textContent = `Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}\nFile Size: ${(file.size / 1024).toFixed(2)} KB\n\n[Document uploaded. You can ask me about this document and I'll reference it by name and metadata.]`;
+        textContent = `Document: ${file.name}\n\nType: ${documentForm.type}\nTitle: ${documentForm.title || file.name}\nDescription: ${documentForm.description || 'No description'}\nFile Type: ${file.type}\nFile Size: ${(file.size / 1024).toFixed(2)} KB`;
       }
 
-      // Create document
-      const documentId = Date.now().toString();
-      addDocument({
+      await addDocument({
         type: documentForm.type,
         title: documentForm.title || file.name,
         description: documentForm.description,
@@ -84,7 +52,6 @@ const PlansContractsView: React.FC = () => {
         textContent,
       });
 
-      // Reset form
       setDocumentForm({
         type: 'Plan',
         title: '',
@@ -104,9 +71,7 @@ const PlansContractsView: React.FC = () => {
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      await processFile(file);
-    }
+    if (file) await processFile(file);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -125,11 +90,8 @@ const PlansContractsView: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
-
     const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      await processFile(files[0]);
-    }
+    if (files && files.length > 0) await processFile(files[0]);
   };
 
   const selectedDocument = documents.find(d => d.id === viewingDocument);
@@ -153,6 +115,15 @@ const PlansContractsView: React.FC = () => {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const downloadFile = () => {
+    if (selectedFile) {
+      const link = document.createElement('a');
+      link.href = selectedFile.dataUrl;
+      link.download = selectedFile.name;
+      link.click();
+    }
   };
 
   return (
@@ -271,8 +242,8 @@ const PlansContractsView: React.FC = () => {
                       {file && (
                         <div className="flex items-center gap-2 mt-2 p-2 bg-gray-50 rounded-lg">
                           {getFileIcon(file.type)}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                          <div className="flex-1">
+                            <p className="text-xs font-medium text-gray-900">{file.name}</p>
                             <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                           </div>
                         </div>
@@ -282,14 +253,19 @@ const PlansContractsView: React.FC = () => {
                       <button
                         onClick={() => setViewingDocument(document.id)}
                         className="p-2 text-gray-400 hover:text-blue-500"
-                        title="View document"
                       >
                         <Eye size={18} />
                       </button>
                       <button
-                        onClick={() => deleteDocument(document.id)}
+                        onClick={async () => {
+                          try {
+                            await deleteDocument(document.id);
+                          } catch (error) {
+                            console.error('Error deleting document:', error);
+                            alert('Failed to delete document. Please try again.');
+                          }
+                        }}
                         className="p-2 text-gray-400 hover:text-red-500"
-                        title="Delete"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -303,69 +279,52 @@ const PlansContractsView: React.FC = () => {
       </div>
 
       {/* Document Viewer Modal */}
-      {selectedDocument && selectedFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-gray-200">
-              <div className="flex items-center gap-3">
-                {getFileIcon(selectedFile.type)}
-                <div>
-                  <h3 className="font-semibold text-gray-900">{selectedDocument.title}</h3>
-                  <p className="text-sm text-gray-500">
-                    {selectedDocument.type} • {formatFileSize(selectedFile.size)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={selectedFile.dataUrl}
-                  download={selectedFile.name}
+      {viewingDocument && selectedFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">{selectedDocument?.title}</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={downloadFile}
                   className="p-2 text-gray-400 hover:text-blue-500"
-                  title="Download"
                 >
                   <Download size={20} />
-                </a>
+                </button>
                 <button
                   onClick={() => setViewingDocument(null)}
                   className="p-2 text-gray-400 hover:text-gray-600"
                 >
-                  <X size={24} />
+                  <X size={20} />
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto p-4 bg-gray-50">
-              {selectedFile.type.startsWith('image/') ? (
+            <div className="flex-1 overflow-auto p-4">
+              {selectedFile.type.includes('image') ? (
                 <img
                   src={selectedFile.dataUrl}
-                  alt={selectedDocument.title}
-                  className="max-w-full h-auto rounded-lg shadow-sm mx-auto"
+                  alt={selectedFile.name}
+                  className="max-w-full h-auto rounded-lg"
                 />
               ) : selectedFile.type.includes('pdf') ? (
                 <iframe
                   src={selectedFile.dataUrl}
-                  className="w-full h-full min-h-[600px] rounded-lg border border-gray-200"
-                  title={selectedDocument.title}
+                  className="w-full h-full min-h-[600px] rounded-lg"
+                  title={selectedFile.name}
                 />
               ) : (
-                <div className="bg-white rounded-lg p-8 text-center">
-                  <FileText size={64} className="mx-auto text-gray-400 mb-4" />
-                  <p className="text-gray-600 mb-4">Preview not available for this file type</p>
-                  <a
-                    href={selectedFile.dataUrl}
-                    download={selectedFile.name}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-accent-purple text-white rounded-lg font-medium hover:bg-purple-600 transition-colors"
+                <div className="text-center py-8">
+                  {getFileIcon(selectedFile.type)}
+                  <p className="mt-4 text-gray-600">{selectedFile.name}</p>
+                  <button
+                    onClick={downloadFile}
+                    className="mt-4 px-4 py-2 bg-accent-purple text-white rounded-xl hover:shadow-md transition-shadow"
                   >
-                    <Download size={18} />
-                    <span>Download File</span>
-                  </a>
+                    Download File
+                  </button>
                 </div>
               )}
             </div>
-            {selectedDocument.description && (
-              <div className="p-4 border-t border-gray-200 bg-white">
-                <p className="text-sm text-gray-600">{selectedDocument.description}</p>
-              </div>
-            )}
           </div>
         </div>
       )}

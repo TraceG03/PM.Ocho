@@ -1,5 +1,5 @@
 import React from 'react';
-import { List, Calendar, CheckSquare, FileText, ClipboardList, Bot } from 'lucide-react';
+import { List, CheckSquare, FileText, ClipboardList, Bot } from 'lucide-react';
 
 interface BottomNavProps {
   currentView: string;

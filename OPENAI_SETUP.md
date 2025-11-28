@@ -77,3 +77,4 @@ After adding the API key:
 - Use a backend proxy/API route to hide the key
 - Never expose API keys in client-side code
 - Consider using environment variables on your server
+

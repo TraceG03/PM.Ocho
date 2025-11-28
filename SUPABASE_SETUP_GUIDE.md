@@ -51,3 +51,4 @@ npm install @supabase/supabase-js
 ### Tables created but no data
 - The initial data insert uses `ON CONFLICT DO NOTHING`, so if you run it multiple times, it won't duplicate
 - Check the Table Editor to see if data exists
+

@@ -88,3 +88,4 @@ Your app is now fully integrated with Supabase! All data will persist:
 - ✅ Files
 
 No more losing data on page refresh!
+
