@@ -1,0 +1,58 @@
+node_modules/
+.expo/
+.expo-shared/
+dist/
+npm-debug.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.env
+.env.local
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Windows system files
+AppData/
+Contacts/
+Cookies/
+Downloads/
+Favorites/
+Links/
+Local Settings/
+Music/
+My Documents/
+My project/
+NetHood/
+NTUSER.*
+ntuser.*
+OneDrive/
+PrintHood/
+Recent/
+Saved Games/
+Searches/
+SendTo/
+Start Menu/
+Templates/
+Videos/
+Application Data/
+*.TM.blf
+*.TMContainer*
+*.regtrans-ms
+desktop.ini
+
+# Personal/system directories
+.cursor/
+.gitconfig
+.node_repl_history
+curseforge/
+insta360/
+source/
