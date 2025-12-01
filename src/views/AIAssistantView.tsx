@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Bot, Send, Upload, FileText, Sparkles, X, AlertCircle } from 'lucide-react';
+import { Bot, Send, Upload, FileText, Sparkles, X, AlertCircle, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { openai, isOpenAIConfigured } from '../lib/openai';
 
@@ -26,11 +26,13 @@ const AIAssistantView: React.FC = () => {
   ]);
   const [inputText, setInputText] = useState('');
   const [documentText, setDocumentText] = useState('');
+  const [urlInput, setUrlInput] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -261,9 +263,106 @@ When answering questions:
     if (files && files.length > 0) await processFile(files[0]);
   };
 
+  // Fetch content from URL
+  const fetchUrlContent = async (url: string): Promise<string> => {
+    try {
+      // Try direct fetch first
+      const response = await fetch(url, {
+        mode: 'cors',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml,text/plain,*/*',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const contentType = response.headers.get('content-type') || '';
+      let text = '';
+      
+      if (contentType.includes('application/json')) {
+        const json = await response.json();
+        text = JSON.stringify(json, null, 2);
+      } else if (contentType.includes('text/html')) {
+        // For HTML, extract text content
+        const html = await response.text();
+        // Simple HTML to text conversion (remove tags and decode entities)
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = html;
+        // Remove script and style elements
+        const scripts = tempDiv.querySelectorAll('script, style');
+        scripts.forEach(el => el.remove());
+        text = tempDiv.textContent || tempDiv.innerText || '';
+        // Clean up extra whitespace
+        text = text.replace(/\s+/g, ' ').trim();
+      } else {
+        // For plain text or other types
+        text = await response.text();
+      }
+      
+      return text;
+    } catch (error: any) {
+      // If direct fetch fails due to CORS, try using a CORS proxy
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+        try {
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+          const proxyResponse = await fetch(proxyUrl);
+          const data = await proxyResponse.json();
+          
+          if (!data.contents) {
+            throw new Error('No content received from proxy');
+          }
+          
+          const html = data.contents;
+          // Extract text from HTML
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = html;
+          // Remove script and style elements
+          const scripts = tempDiv.querySelectorAll('script, style');
+          scripts.forEach(el => el.remove());
+          let text = tempDiv.textContent || tempDiv.innerText || '';
+          // Clean up extra whitespace
+          text = text.replace(/\s+/g, ' ').trim();
+          return text;
+        } catch (proxyError: any) {
+          throw new Error(`Failed to fetch URL: ${error.message}. Please ensure the URL is publicly accessible or paste the content directly.`);
+        }
+      }
+      throw error;
+    }
+  };
+
+  const handleFetchUrl = async () => {
+    if (!urlInput.trim()) {
+      alert('Please enter a URL');
+      return;
+    }
+
+    // Validate URL format
+    try {
+      new URL(urlInput.trim());
+    } catch {
+      alert('Please enter a valid URL (e.g., https://example.com/document)');
+      return;
+    }
+
+    try {
+      setIsFetchingUrl(true);
+      const content = await fetchUrlContent(urlInput.trim());
+      setDocumentText(content);
+      setUrlInput('');
+      alert('Content fetched successfully! You can now extract milestones.');
+    } catch (error: any) {
+      alert(`Failed to fetch URL: ${error.message}`);
+    } finally {
+      setIsFetchingUrl(false);
+    }
+  };
+
   const handleExtractMilestones = async () => {
-    if (!documentText.trim() && !uploadedFile) {
-      alert('Please upload a document or paste text');
+    if (!documentText.trim() && !uploadedFile && !urlInput.trim()) {
+      alert('Please upload a document, paste text, or provide a URL');
       return;
     }
 
@@ -271,6 +370,17 @@ When answering questions:
 
     try {
       let textToAnalyze = documentText;
+
+      // If we have a URL, fetch its content first
+      if (urlInput.trim() && !textToAnalyze.trim()) {
+        try {
+          textToAnalyze = await fetchUrlContent(urlInput.trim());
+        } catch (error: any) {
+          alert(`Failed to fetch URL: ${error.message}`);
+          setIsExtracting(false);
+          return;
+        }
+      }
 
       // If we have an uploaded file, try to get its content
       if (uploadedFile && !textToAnalyze.trim()) {
@@ -406,6 +516,7 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
           alert(`Successfully extracted ${createdCount} milestone(s) using AI!`);
           setDocumentText('');
           setUploadedFile(null);
+          setUrlInput('');
         } else {
           alert('AI extracted milestones but they were missing required fields. Please check the document format.');
         }
@@ -441,6 +552,7 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
         }
         setDocumentText('');
         setUploadedFile(null);
+        setUrlInput('');
       }
     } catch (error: any) {
       console.error('Error extracting milestones:', error);
@@ -601,6 +713,37 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
                 </div>
               </div>
             )}
+            <div className="mt-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Or enter a URL to fetch content
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder="https://example.com/document.pdf"
+                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                />
+                <button
+                  onClick={handleFetchUrl}
+                  disabled={isFetchingUrl || !urlInput.trim()}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isFetchingUrl ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      <span>Fetching...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LinkIcon size={18} />
+                      <span>Fetch</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
             <textarea
               value={documentText}
               onChange={(e) => setDocumentText(e.target.value)}
@@ -610,7 +753,7 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
             />
             <button
               onClick={handleExtractMilestones}
-              disabled={isExtracting || (!documentText.trim() && !uploadedFile)}
+              disabled={isExtracting || (!documentText.trim() && !uploadedFile && !urlInput.trim())}
               className="w-full mt-4 bg-accent-purple text-white py-4 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isExtracting ? (
