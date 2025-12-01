@@ -4,9 +4,42 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
-// Check if icon files exist
-const icon192Exists = existsSync(join(process.cwd(), 'public', 'pwa-192x192.png'))
-const icon512Exists = existsSync(join(process.cwd(), 'public', 'pwa-512x512.png'))
+// Safely check if icon files exist and build icons array
+function getIcons() {
+  try {
+    const icon192Exists = existsSync(join(process.cwd(), 'public', 'pwa-192x192.png'))
+    const icon512Exists = existsSync(join(process.cwd(), 'public', 'pwa-512x512.png'))
+    
+    const icons = []
+    if (icon192Exists) {
+      icons.push({
+        src: 'pwa-192x192.png',
+        sizes: '192x192',
+        type: 'image/png'
+      })
+    }
+    if (icon512Exists) {
+      icons.push(
+        {
+          src: 'pwa-512x512.png',
+          sizes: '512x512',
+          type: 'image/png'
+        },
+        {
+          src: 'pwa-512x512.png',
+          sizes: '512x512',
+          type: 'image/png',
+          purpose: 'any maskable'
+        }
+      )
+    }
+    return icons
+  } catch (error) {
+    // If file system operations fail, return empty array (PWA will work without custom icons)
+    console.warn('Could not check for PWA icons:', error.message)
+    return []
+  }
+}
 
 export default defineConfig({
   plugins: [
@@ -24,26 +57,7 @@ export default defineConfig({
         orientation: 'portrait',
         scope: '/',
         start_url: '/',
-        icons: [
-          ...(icon192Exists ? [{
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          }] : []),
-          ...(icon512Exists ? [
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any maskable'
-            }
-          ] : [])
-        ]
+        icons: getIcons()
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
