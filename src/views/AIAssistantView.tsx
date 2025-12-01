@@ -487,94 +487,27 @@ When answering questions:
       }
 
       if (openAIConfigured && openai) {
-        // Build context about existing milestones
-        const existingMilestonesContext = milestones.length > 0 
-          ? `\n\nEXISTING MILESTONES (avoid duplicates):\n${milestones.slice(-10).map(m => `- ${m.title} (${m.startDate} to ${m.endDate})`).join('\n')}`
-          : '';
+        // Simple ChatGPT-style prompt for timeline data extraction
+        const systemPrompt = `You are a helpful AI assistant. A user has uploaded a document and wants you to extract timeline data from it.
 
-        // Build phase information with keywords
-        const phaseInfo = phases.length > 0
-          ? phases.map(p => {
-              const keywords = getPhaseKeywords(p.name);
-              return `- "${p.name}" (keywords: ${keywords.slice(0, 3).join(', ')})`;
-            }).join('\n')
-          : 'No phases defined yet';
+Extract any dates, milestones, tasks, events, or scheduled items from the document and return them in a structured format.
 
-        // Use OpenAI to extract and intelligently define milestones
-        const systemPrompt = `You are an AI assistant specialized in analyzing construction project documents and intelligently extracting milestones.
+Available project phases: ${phases.map(p => p.name).join(', ') || 'None defined'}
 
-PROJECT CONTEXT:
-- Current phases: ${phases.map(p => p.name).join(', ') || 'None defined'}
-- Existing milestones: ${milestones.length} milestone(s) already in the timeline${existingMilestonesContext}
-
-YOUR TASK:
-Analyze the provided document and intelligently identify what should be considered a "milestone" for this construction project. You have the authority to define what constitutes a milestone based on the document's context and construction industry best practices.
-
-DEFINING MILESTONES:
-A milestone can be:
-- A significant project completion point or phase completion
-- A major deliverable or achievement
-- A critical inspection, approval, or checkpoint
-- An important task or activity that marks progress
-- A scheduled event that impacts project timeline
-- Any construction-related item with a date that represents meaningful progress
-
-Use your judgment to determine what should be extracted as a milestone. Consider:
-- The document's context and structure
-- The importance of the item to project progress
-- Whether it has a specific date or timeframe
-- The level of detail in the document (detailed docs may have more granular milestones)
-- Industry standards for construction project milestones
-
-EXTRACTION GUIDELINES:
-1. Analyze the document structure first - is it a high-level schedule, detailed task list, or project plan?
-2. Extract items that have dates, timeframes, or are part of a sequence
-3. Be intelligent about granularity - if the document is high-level, extract major phases; if detailed, extract specific tasks
-4. Convert all dates to YYYY-MM-DD format (handle any input format: MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", "Q1 2024", relative dates, etc.)
-5. If only one date is found, use it as both startDate and endDate
-6. If timeframes are mentioned (e.g., "Week 1", "Month 2"), estimate dates based on document context and today: ${new Date().toISOString().split('T')[0]}
-7. Create clear, descriptive titles that capture what the milestone represents
-8. Write notes that explain the milestone's significance and context
-9. Avoid duplicates of existing milestones
-
-PHASE MATCHING:
-Available phases:
-${phaseInfo}
-
-Intelligently match milestones to phases based on:
-- Content analysis of the milestone
-- Construction phase terminology
-- Project workflow understanding
-- Suggest the best matching phase in "suggestedPhase"
-
-DATE HANDLING:
-- Accept and convert dates from any format
-- Handle relative dates intelligently based on document context
-- If only start date found, end date = start date
-- If only end date found, start date = end date
-- Estimate dates for timeframes based on document structure
-
-Return your response as a JSON object with a "milestones" array in this exact format:
+Return a JSON object with this structure:
 {
   "milestones": [
     {
-      "title": "Milestone Name",
+      "title": "Item name",
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
-      "notes": "Description explaining what this milestone represents and why it's significant",
-      "suggestedPhase": "Phase Name (optional)"
+      "notes": "Description",
+      "suggestedPhase": "Phase name (optional)"
     }
   ]
 }
 
-YOUR INTELLIGENCE:
-- Use your understanding of construction projects to determine what's important
-- Adapt your extraction strategy based on the document type and detail level
-- Be thorough but selective - extract meaningful milestones, not every single mention
-- If the document is vague or unclear, make reasonable inferences based on construction industry knowledge
-- Only return an empty array if the document truly contains no extractable construction-related information with dates or timeframes
-
-If you cannot find any extractable milestones after thorough analysis, return: {"milestones": []}`;
+Convert all dates to YYYY-MM-DD format. If only one date exists, use it for both start and end dates.`;
 
         setAiError(null);
         
@@ -586,7 +519,7 @@ If you cannot find any extractable milestones after thorough analysis, return: {
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Analyze this construction project document and intelligently extract milestones. Use your judgment to determine what should be considered a milestone based on the document's context, structure, and the importance of each item to the project timeline:\n\n${textToAnalyze.substring(0, 8000)}` }
+            { role: 'user', content: `Please extract all timeline data from this document. Find any dates, milestones, tasks, events, or scheduled items and return them in the requested format:\n\n${textToAnalyze.substring(0, 8000)}` }
           ],
           temperature: 0.4, // Slightly higher for more creative extraction
           max_tokens: 2000,
