@@ -508,13 +508,16 @@ PROJECT CONTEXT:
 - Existing milestones: ${milestones.length} milestone(s) already in the timeline${existingMilestonesContext}
 
 EXTRACTION RULES:
-1. Extract meaningful construction milestones (not tasks or daily activities)
-2. Milestones should represent significant project completion points or major phases
+1. Extract ANY construction-related milestones, phases, or significant project events (be lenient - extract even if not perfectly formatted)
+2. Milestones can be major phases, completion points, inspections, or important project stages
 3. Dates must be in YYYY-MM-DD format (convert from any format found: MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", etc.)
 4. If only one date is found, use it as both startDate and endDate
-5. Titles should be clear and action-oriented (e.g., "Foundation Complete", "Roof Installation", "Electrical Rough-In")
-6. Notes should describe what the milestone represents and its significance
-7. Avoid creating duplicates of existing milestones
+5. If no explicit dates but timeframes mentioned (e.g., "Week 1", "Month 2"), estimate dates based on document context
+6. Titles should be clear and action-oriented (e.g., "Foundation Complete", "Roof Installation", "Electrical Rough-In")
+7. Notes should describe what the milestone represents and its significance
+8. If you see any construction-related activities with dates or timeframes, extract them as milestones
+9. Avoid creating duplicates of existing milestones
+10. IMPORTANT: If the document mentions any project phases, stages, or completion points, extract them even if dates are approximate
 
 PHASE MATCHING:
 Available phases:
@@ -546,17 +549,27 @@ Return your response as a JSON object with a "milestones" array in this exact fo
   ]
 }
 
-If you cannot find clear dates or milestones, return: {"milestones": []}`;
+IMPORTANT INSTRUCTIONS:
+- Be proactive in extracting milestones - if you see any construction activities, phases, or project stages mentioned, extract them
+- If dates are mentioned in relative terms (e.g., "Week 3", "Month 2", "Q1"), estimate actual dates based on today's date: ${new Date().toISOString().split('T')[0]}
+- If the document describes a project timeline or schedule, extract all mentioned phases/stages as milestones
+- Only return an empty array if the document contains NO construction-related content whatsoever
+
+If you cannot find clear dates or milestones after thorough analysis, return: {"milestones": []}`;
 
         setAiError(null);
+        
+        // Show document preview for debugging
+        const documentPreview = textToAnalyze.substring(0, 1000);
+        console.log('Document preview:', documentPreview);
         
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Extract milestones from this document:\n\n${textToAnalyze.substring(0, 8000)}` }
+            { role: 'user', content: `Extract milestones from this document. Be thorough and extract any construction-related milestones, phases, or project stages you find:\n\n${textToAnalyze.substring(0, 8000)}` }
           ],
-          temperature: 0.3,
+          temperature: 0.4, // Slightly higher for more creative extraction
           max_tokens: 2000,
           response_format: { type: "json_object" } // Force structured JSON output
         });
@@ -607,8 +620,21 @@ If you cannot find clear dates or milestones, return: {"milestones": []}`;
           }
         }
 
+        // Log the AI response for debugging
+        console.log('AI Response:', response);
+        console.log('Extracted Milestones:', extractedMilestones);
+
         if (extractedMilestones.length === 0) {
-          alert('⚠️ No milestones could be extracted from the document.\n\nPlease ensure the document contains:\n- Clear milestone information\n- Dates in any format\n- Construction project details');
+          // Try to extract dates manually as a fallback
+          const datePattern = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi;
+          const dates = textToAnalyze.match(datePattern);
+          
+          if (dates && dates.length > 0) {
+            const fallbackMessage = `⚠️ AI couldn't extract structured milestones, but found ${dates.length} date(s) in the document:\n\n${dates.slice(0, 5).join(', ')}${dates.length > 5 ? '...' : ''}\n\nPlease try:\n- Adding more context about milestones in the document\n- Ensuring dates are clearly associated with milestone descriptions\n- Using a document with explicit milestone information`;
+            alert(fallbackMessage);
+          } else {
+            alert('⚠️ No milestones could be extracted from the document.\n\nPossible reasons:\n- Document doesn\'t contain clear milestone information\n- Dates are not present or not clearly formatted\n- Document may need more construction-specific context\n\nTips:\n- Include milestone names with dates (e.g., "Foundation Complete: January 15, 2024")\n- Use explicit project timeline language\n- Ensure dates are in a recognizable format');
+          }
           setIsExtracting(false);
           return;
         }
