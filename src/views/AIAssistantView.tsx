@@ -500,47 +500,59 @@ When answering questions:
             }).join('\n')
           : 'No phases defined yet';
 
-        // Use OpenAI to extract milestones and tasks with enhanced prompt
-        const systemPrompt = `You are an AI assistant that extracts project milestones and tasks from construction documents, schedules, timelines, and task lists.
+        // Use OpenAI to extract and intelligently define milestones
+        const systemPrompt = `You are an AI assistant specialized in analyzing construction project documents and intelligently extracting milestones.
 
 PROJECT CONTEXT:
 - Current phases: ${phases.map(p => p.name).join(', ') || 'None defined'}
 - Existing milestones: ${milestones.length} milestone(s) already in the timeline${existingMilestonesContext}
 
-EXTRACTION RULES:
-1. Extract ANY construction-related milestones, phases, tasks, or significant project events (be lenient - extract even if not perfectly formatted)
-2. Milestones can be:
-   - Major phases and completion points
-   - Tasks and activities with dates
-   - Inspections and important project stages
-   - Daily, weekly, or scheduled work items
-   - Any construction-related work with a date or timeframe
-3. Dates must be in YYYY-MM-DD format (convert from any format found: MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", etc.)
-4. If only one date is found, use it as both startDate and endDate
-5. If no explicit dates but timeframes mentioned (e.g., "Week 1", "Month 2", "Day 5"), estimate dates based on document context
-6. Titles should be clear and action-oriented (e.g., "Foundation Complete", "Roof Installation", "Install Electrical Outlets", "Paint Interior Walls")
-7. Notes should describe what the milestone/task represents and its significance
-8. If you see any construction-related activities, tasks, or work items with dates or timeframes, extract them as milestones
-9. Tasks are welcome - extract them as milestones even if they seem like smaller work items
-10. Avoid creating duplicates of existing milestones
-11. IMPORTANT: Extract tasks, activities, and work items as milestones - don't filter them out
+YOUR TASK:
+Analyze the provided document and intelligently identify what should be considered a "milestone" for this construction project. You have the authority to define what constitutes a milestone based on the document's context and construction industry best practices.
+
+DEFINING MILESTONES:
+A milestone can be:
+- A significant project completion point or phase completion
+- A major deliverable or achievement
+- A critical inspection, approval, or checkpoint
+- An important task or activity that marks progress
+- A scheduled event that impacts project timeline
+- Any construction-related item with a date that represents meaningful progress
+
+Use your judgment to determine what should be extracted as a milestone. Consider:
+- The document's context and structure
+- The importance of the item to project progress
+- Whether it has a specific date or timeframe
+- The level of detail in the document (detailed docs may have more granular milestones)
+- Industry standards for construction project milestones
+
+EXTRACTION GUIDELINES:
+1. Analyze the document structure first - is it a high-level schedule, detailed task list, or project plan?
+2. Extract items that have dates, timeframes, or are part of a sequence
+3. Be intelligent about granularity - if the document is high-level, extract major phases; if detailed, extract specific tasks
+4. Convert all dates to YYYY-MM-DD format (handle any input format: MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", "Q1 2024", relative dates, etc.)
+5. If only one date is found, use it as both startDate and endDate
+6. If timeframes are mentioned (e.g., "Week 1", "Month 2"), estimate dates based on document context and today: ${new Date().toISOString().split('T')[0]}
+7. Create clear, descriptive titles that capture what the milestone represents
+8. Write notes that explain the milestone's significance and context
+9. Avoid duplicates of existing milestones
 
 PHASE MATCHING:
 Available phases:
 ${phaseInfo}
 
-Match milestones to phases based on:
-- Milestone title keywords
-- Milestone notes content
+Intelligently match milestones to phases based on:
+- Content analysis of the milestone
 - Construction phase terminology
-- Suggest the best matching phase in the "suggestedPhase" field
+- Project workflow understanding
+- Suggest the best matching phase in "suggestedPhase"
 
 DATE HANDLING:
-- Accept dates in any format (MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", "Q1 2024", etc.)
-- Convert all to YYYY-MM-DD format
-- If relative dates found ("next week", "in 2 months"), calculate from today: ${new Date().toISOString().split('T')[0]}
+- Accept and convert dates from any format
+- Handle relative dates intelligently based on document context
 - If only start date found, end date = start date
 - If only end date found, start date = end date
+- Estimate dates for timeframes based on document structure
 
 Return your response as a JSON object with a "milestones" array in this exact format:
 {
@@ -549,22 +561,20 @@ Return your response as a JSON object with a "milestones" array in this exact fo
       "title": "Milestone Name",
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
-      "notes": "Brief description",
+      "notes": "Description explaining what this milestone represents and why it's significant",
       "suggestedPhase": "Phase Name (optional)"
     }
   ]
 }
 
-IMPORTANT INSTRUCTIONS:
-- Be proactive in extracting milestones and tasks - if you see any construction activities, phases, tasks, work items, or project stages mentioned, extract them
-- Extract tasks as milestones - don't filter out smaller work items, they are valuable for project tracking
-- If dates are mentioned in relative terms (e.g., "Week 3", "Month 2", "Q1", "Day 10"), estimate actual dates based on today's date: ${new Date().toISOString().split('T')[0]}
-- If the document describes a project timeline, schedule, task list, or work plan, extract all mentioned items as milestones
-- Tasks with dates should be extracted even if they seem routine or minor
-- Examples of what to extract: "Install windows on Day 5", "Paint walls - Week 2", "Electrical inspection - Jan 20", "Pour concrete foundation"
-- Only return an empty array if the document contains NO construction-related content whatsoever
+YOUR INTELLIGENCE:
+- Use your understanding of construction projects to determine what's important
+- Adapt your extraction strategy based on the document type and detail level
+- Be thorough but selective - extract meaningful milestones, not every single mention
+- If the document is vague or unclear, make reasonable inferences based on construction industry knowledge
+- Only return an empty array if the document truly contains no extractable construction-related information with dates or timeframes
 
-If you cannot find clear dates or milestones/tasks after thorough analysis, return: {"milestones": []}`;
+If you cannot find any extractable milestones after thorough analysis, return: {"milestones": []}`;
 
         setAiError(null);
         
@@ -576,7 +586,7 @@ If you cannot find clear dates or milestones/tasks after thorough analysis, retu
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Extract milestones and tasks from this document. Be thorough and extract any construction-related milestones, phases, tasks, work items, or project stages you find. Include tasks as milestones - don't filter them out:\n\n${textToAnalyze.substring(0, 8000)}` }
+            { role: 'user', content: `Analyze this construction project document and intelligently extract milestones. Use your judgment to determine what should be considered a milestone based on the document's context, structure, and the importance of each item to the project timeline:\n\n${textToAnalyze.substring(0, 8000)}` }
           ],
           temperature: 0.4, // Slightly higher for more creative extraction
           max_tokens: 2000,
