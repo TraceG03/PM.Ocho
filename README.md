@@ -38,7 +38,10 @@ A comprehensive, mobile-first construction project management web application bu
 - **Tailwind CSS 3.4.1**: Styling
 - **Lucide React**: Icon library
 - **Vite**: Build tool and dev server
+- **Vite PWA Plugin**: Progressive Web App support
 - **Context API**: State management
+- **Supabase**: Backend database and storage
+- **OpenAI**: AI-powered assistant features
 
 ## Getting Started
 
@@ -100,12 +103,52 @@ src/
 
 The app uses React Context API for centralized state management. All data (phases, milestones, tasks, notes, photos) persists during the session and is shared across all views.
 
+## Progressive Web App (PWA)
+
+This application is a Progressive Web App that can be installed on your device for a native app-like experience.
+
+### PWA Features
+
+- **Installable**: Add to home screen on mobile and desktop
+- **Offline Support**: Service worker caches assets for offline access
+- **App-like Experience**: Standalone display mode, no browser UI
+- **Fast Loading**: Cached resources load instantly
+- **Network Caching**: Supabase API responses are cached for better performance
+
+### Setting Up PWA Icons
+
+To complete the PWA setup, you need to generate app icons:
+
+1. Open `public/pwa-icon-generator.html` in your browser
+2. Click the download buttons for each icon size
+3. Save the downloaded files to the `public` folder:
+   - `pwa-192x192.png`
+   - `pwa-512x512.png`
+   - `apple-touch-icon.png`
+
+After adding the icons, rebuild the app:
+
+```bash
+npm run build
+```
+
+### Installing the PWA
+
+**On Mobile (iOS/Android):**
+- Open the app in Safari (iOS) or Chrome (Android)
+- Tap the Share button
+- Select "Add to Home Screen"
+
+**On Desktop (Chrome/Edge):**
+- Look for the install icon in the address bar
+- Click "Install" when prompted
+
 ## Browser Support
 
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
+- Chrome (latest) - Full PWA support
+- Firefox (latest) - Full PWA support
+- Safari (latest) - Full PWA support (iOS 11.3+)
+- Edge (latest) - Full PWA support
 
 ## License
 
