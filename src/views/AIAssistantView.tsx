@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Bot, Send, Upload, FileText, Sparkles, X, AlertCircle, Link as LinkIcon } from 'lucide-react';
+import { Bot, Send, Upload, FileText, Sparkles, X, AlertCircle } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { openai, isOpenAIConfigured } from '../lib/openai';
 
@@ -913,9 +913,25 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
       )}
 
       {activeTab === 'extractor' && (
-        <div className="px-4 mt-4 space-y-4">
-          <div className="bg-white rounded-3xl shadow-sm p-4">
-            <h2 className="font-semibold text-gray-900 mb-3">Upload Document</h2>
+        <div className="px-4 mt-4">
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">AI Timeline Extractor</h1>
+            <p className="text-sm text-gray-500">Paste project docs to auto-extract milestones</p>
+          </div>
+
+          {/* Project Information Card */}
+          <div className="bg-white rounded-3xl shadow-sm p-6 relative">
+            {/* AI Powered Badge */}
+            <div className="absolute top-6 right-6">
+              <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-medium rounded-full">
+                AI Powered
+              </span>
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Project Information</h2>
+
+            {/* Upload Section */}
             <input ref={fileInputRef} type="file" onChange={(e) => e.target.files?.[0] && processFile(e.target.files[0])} className="hidden" />
             {!uploadedFile ? (
               <div
@@ -923,21 +939,19 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`w-full border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
-                  isDragging ? 'border-accent-purple bg-purple-100 scale-105' : 'border-gray-300 hover:border-accent-purple hover:bg-purple-50'
+                className={`w-full border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer mb-4 ${
+                  isDragging ? 'border-blue-500 bg-blue-50 scale-105' : 'border-blue-300 bg-blue-50/50 hover:border-blue-400'
                 } ${uploading ? 'opacity-50' : ''}`}
               >
-                <Upload size={48} className={`mx-auto mb-2 ${isDragging ? 'text-accent-purple' : 'text-gray-400'}`} />
-                <p className="text-sm text-gray-500">
-                  {uploading ? 'Uploading...' : isDragging ? 'Drop file here' : 'Click to upload or drag and drop'}
-                </p>
-                <p className="text-xs text-gray-400 mt-1">Any file type accepted</p>
+                <Upload size={48} className={`mx-auto mb-3 ${isDragging ? 'text-blue-500' : 'text-blue-400'}`} />
+                <p className="text-base font-medium text-blue-600 mb-1">Upload Document</p>
+                <p className="text-sm text-gray-500">PDF, Word, or Text files</p>
               </div>
             ) : (
-              <div className="border-2 border-accent-purple rounded-2xl p-4 mb-4 bg-purple-50">
+              <div className="border-2 border-blue-400 rounded-2xl p-4 mb-4 bg-blue-50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <FileText size={24} className="text-accent-purple" />
+                    <FileText size={24} className="text-blue-600" />
                     <div>
                       <p className="text-sm font-medium text-gray-900">{getFile(uploadedFile)?.name || 'Uploaded file'}</p>
                       <p className="text-xs text-gray-500">File uploaded successfully</p>
@@ -949,74 +963,69 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
                 </div>
               </div>
             )}
-            <div className="mt-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Or enter a URL to fetch content
-              </label>
-              <div className="space-y-2">
+
+            {/* Or paste text */}
+            <p className="text-sm text-gray-700 mb-3">Or paste project document or schedule</p>
+
+            {/* Text Area with Example */}
+            <textarea
+              value={documentText}
+              onChange={(e) => setDocumentText(e.target.value)}
+              placeholder={`Paste your project schedule, contract, or
+any document with dates and milestones...
+Example:
+Foundation work begins May 15, 2025
+Masonry phase from June 1 - June 20
+Electrical installation: July 5th
+PTAR delivery scheduled for July 15
+Inspection required by August 1`}
+              rows={12}
+              className="w-full px-4 py-4 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50 text-gray-700 placeholder-gray-400"
+            />
+
+            {/* URL Input (Hidden by default, can be shown if needed) */}
+            {urlInput && (
+              <div className="mt-3">
                 <input
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/document.pdf or Asana API URL"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                  placeholder="Or enter a URL..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 />
                 {urlInput.includes('asana.com/api') && (
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
-                      Asana Personal Access Token (required for Asana API)
-                    </label>
-                    <input
-                      type="password"
-                      value={asanaApiKey}
-                      onChange={(e) => setAsanaApiKey(e.target.value)}
-                      placeholder="Enter your Asana API key"
-                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple text-sm"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Get your token from: <a href="https://app.asana.com/0/my-apps" target="_blank" rel="noopener noreferrer" className="text-accent-purple underline">Asana Developer Settings</a>
-                    </p>
-                  </div>
+                  <input
+                    type="password"
+                    value={asanaApiKey}
+                    onChange={(e) => setAsanaApiKey(e.target.value)}
+                    placeholder="Asana API Key"
+                    className="w-full mt-2 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
                 )}
                 <button
                   onClick={handleFetchUrl}
-                  disabled={(isFetchingUrl || isFetchingAsana) || !urlInput.trim() || (urlInput.includes('asana.com/api') && !asanaApiKey.trim())}
-                  className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  disabled={(isFetchingUrl || isFetchingAsana) || !urlInput.trim()}
+                  className="mt-2 w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 text-sm"
                 >
-                  {(isFetchingUrl || isFetchingAsana) ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-                      <span>Fetching...</span>
-                    </>
-                  ) : (
-                    <>
-                      <LinkIcon size={18} />
-                      <span>Fetch</span>
-                    </>
-                  )}
+                  {(isFetchingUrl || isFetchingAsana) ? 'Fetching...' : 'Fetch URL'}
                 </button>
               </div>
-            </div>
-            <textarea
-              value={documentText}
-              onChange={(e) => setDocumentText(e.target.value)}
-              placeholder="Paste your project schedule, timeline, or document text here..."
-              rows={10}
-              className="w-full mt-3 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple resize-none"
-            />
+            )}
+
+            {/* Extract Button */}
             <button
               onClick={handleExtractMilestones}
               disabled={isExtracting || (!documentText.trim() && !uploadedFile && !urlInput.trim())}
-              className="w-full mt-4 bg-accent-purple text-white py-4 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-6 bg-gray-200 text-gray-700 py-4 rounded-2xl font-medium shadow-sm hover:bg-gray-300 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {isExtracting ? (
                 <>
-                  <Sparkles size={20} className="animate-pulse" />
+                  <Sparkles size={20} className="animate-pulse text-blue-500" />
                   <span>Extracting milestones...</span>
                 </>
               ) : (
                 <>
-                  <FileText size={20} />
+                  <Sparkles size={20} className="text-blue-500" />
                   <span>Extract Milestones with AI</span>
                 </>
               )}
