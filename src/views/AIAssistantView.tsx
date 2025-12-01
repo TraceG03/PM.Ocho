@@ -38,6 +38,89 @@ const AIAssistantView: React.FC = () => {
 
   const suggestedChips = ['Timeline planning', 'Safety guidelines', 'Material estimates'];
 
+  // Helper function to get phase keywords for better matching
+  const getPhaseKeywords = (phaseName: string): string[] => {
+    const keywords: { [key: string]: string[] } = {
+      'Foundation': ['foundation', 'excavation', 'concrete', 'footing', 'slab', 'base', 'groundwork'],
+      'Framing': ['frame', 'framing', 'walls', 'structure', 'studs', 'joists', 'beams', 'skeleton'],
+      'Roofing': ['roof', 'roofing', 'shingles', 'gutter', 'eaves', 'truss', 'rafter'],
+      'Electrical': ['electrical', 'wiring', 'outlets', 'panel', 'circuit', 'breaker', 'conduit'],
+      'Plumbing': ['plumbing', 'pipes', 'fixtures', 'drain', 'water', 'sewer', 'faucet'],
+      'HVAC': ['hvac', 'heating', 'cooling', 'ventilation', 'ductwork', 'air conditioning', 'furnace'],
+      'Interior': ['drywall', 'paint', 'flooring', 'trim', 'finish', 'cabinets', 'interior'],
+      'Exterior': ['siding', 'exterior', 'landscaping', 'driveway', 'deck', 'patio', 'outside'],
+      'Planning': ['plan', 'planning', 'design', 'permit', 'approval', 'preparation'],
+      'Site Work': ['site', 'clearing', 'grading', 'excavation', 'utilities', 'site prep']
+    };
+    
+    // Check for exact match
+    if (keywords[phaseName]) {
+      return keywords[phaseName];
+    }
+    
+    // Check for partial match
+    for (const [key, values] of Object.entries(keywords)) {
+      if (phaseName.toLowerCase().includes(key.toLowerCase()) || key.toLowerCase().includes(phaseName.toLowerCase())) {
+        return values;
+      }
+    }
+    
+    // Default: return phase name as keyword
+    return [phaseName.toLowerCase()];
+  };
+
+  // Helper function to normalize dates to YYYY-MM-DD format
+  const normalizeDate = (dateStr: string): string | null => {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    
+    // Already in YYYY-MM-DD format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) {
+      const date = new Date(dateStr.trim());
+      if (!isNaN(date.getTime())) return dateStr.trim();
+    }
+    
+    // Try parsing various formats
+    const date = new Date(dateStr.trim());
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    
+    return null;
+  };
+
+  // Improved phase matching with keyword-based scoring
+  const findBestPhase = (milestone: any): string => {
+    if (!phases.length) return '';
+    
+    // Check if AI suggested a phase
+    if (milestone.suggestedPhase) {
+      const suggested = phases.find(p => 
+        p.name.toLowerCase() === milestone.suggestedPhase.toLowerCase()
+      );
+      if (suggested) return suggested.id;
+    }
+    
+    // Score-based matching
+    const phaseScores = phases.map(phase => {
+      const keywords = getPhaseKeywords(phase.name);
+      const text = `${milestone.title} ${milestone.notes || ''}`.toLowerCase();
+      
+      let score = 0;
+      keywords.forEach(keyword => {
+        if (text.includes(keyword)) score += 2;
+      });
+      if (text.includes(phase.name.toLowerCase())) score += 3;
+      
+      return { phase, score };
+    });
+    
+    phaseScores.sort((a, b) => b.score - a.score);
+    return phaseScores[0].score > 0 ? phaseScores[0].phase.id : phases[0].id;
+  };
+
   // Search documents for relevant information
   const searchDocuments = async (query: string): Promise<string> => {
     if (!documents || documents.length === 0) {
@@ -404,14 +487,51 @@ When answering questions:
       }
 
       if (openAIConfigured && openai) {
-        // Use OpenAI to extract milestones
+        // Build context about existing milestones
+        const existingMilestonesContext = milestones.length > 0 
+          ? `\n\nEXISTING MILESTONES (avoid duplicates):\n${milestones.slice(-10).map(m => `- ${m.title} (${m.startDate} to ${m.endDate})`).join('\n')}`
+          : '';
+
+        // Build phase information with keywords
+        const phaseInfo = phases.length > 0
+          ? phases.map(p => {
+              const keywords = getPhaseKeywords(p.name);
+              return `- "${p.name}" (keywords: ${keywords.slice(0, 3).join(', ')})`;
+            }).join('\n')
+          : 'No phases defined yet';
+
+        // Use OpenAI to extract milestones with enhanced prompt
         const systemPrompt = `You are an AI assistant that extracts project milestones from construction documents, schedules, and timelines.
 
-Your task is to analyze the provided document and extract meaningful milestones with:
-- Clear, descriptive titles (e.g., "Foundation Complete", "Wall Framing", "Roof Installation")
-- Start dates (in YYYY-MM-DD format)
-- End dates (in YYYY-MM-DD format)
-- Brief notes describing the milestone
+PROJECT CONTEXT:
+- Current phases: ${phases.map(p => p.name).join(', ') || 'None defined'}
+- Existing milestones: ${milestones.length} milestone(s) already in the timeline${existingMilestonesContext}
+
+EXTRACTION RULES:
+1. Extract meaningful construction milestones (not tasks or daily activities)
+2. Milestones should represent significant project completion points or major phases
+3. Dates must be in YYYY-MM-DD format (convert from any format found: MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", etc.)
+4. If only one date is found, use it as both startDate and endDate
+5. Titles should be clear and action-oriented (e.g., "Foundation Complete", "Roof Installation", "Electrical Rough-In")
+6. Notes should describe what the milestone represents and its significance
+7. Avoid creating duplicates of existing milestones
+
+PHASE MATCHING:
+Available phases:
+${phaseInfo}
+
+Match milestones to phases based on:
+- Milestone title keywords
+- Milestone notes content
+- Construction phase terminology
+- Suggest the best matching phase in the "suggestedPhase" field
+
+DATE HANDLING:
+- Accept dates in any format (MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", "Q1 2024", etc.)
+- Convert all to YYYY-MM-DD format
+- If relative dates found ("next week", "in 2 months"), calculate from today: ${new Date().toISOString().split('T')[0]}
+- If only start date found, end date = start date
+- If only end date found, start date = end date
 
 Return your response as a JSON object with a "milestones" array in this exact format:
 {
@@ -420,18 +540,16 @@ Return your response as a JSON object with a "milestones" array in this exact fo
       "title": "Milestone Name",
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
-      "notes": "Brief description"
+      "notes": "Brief description",
+      "suggestedPhase": "Phase Name (optional)"
     }
   ]
 }
 
-If you cannot find clear dates or milestones, return: {"milestones": []}
+If you cannot find clear dates or milestones, return: {"milestones": []}`;
 
-Available phases in the project:
-${phases.map(p => `- ${p.name} (ID: ${p.id})`).join('\n') || 'No phases defined yet'}
-
-Try to match milestones to appropriate phases when possible. Extract dates from the document and convert them to YYYY-MM-DD format.`;
-
+        setAiError(null);
+        
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
@@ -439,28 +557,37 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
             { role: 'user', content: `Extract milestones from this document:\n\n${textToAnalyze.substring(0, 8000)}` }
           ],
           temperature: 0.3,
-          max_tokens: 1500,
+          max_tokens: 2000,
+          response_format: { type: "json_object" } // Force structured JSON output
         });
 
-        const response = completion.choices[0]?.message?.content || '[]';
-        let milestones: any[] = [];
+        const response = completion.choices[0]?.message?.content || '{}';
+        let extractedMilestones: any[] = [];
         
         try {
-          // Try to parse as JSON directly
+          // Parse JSON response (should be structured now)
           const parsed = JSON.parse(response);
-          milestones = Array.isArray(parsed) ? parsed : (parsed.milestones || []);
+          extractedMilestones = Array.isArray(parsed) ? parsed : (parsed.milestones || []);
         } catch (e) {
-          // Try to extract JSON from markdown code blocks
-          const jsonMatch = response.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+          // Fallback: Try to extract JSON from markdown code blocks
+          const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
           if (jsonMatch) {
             try {
-              milestones = JSON.parse(jsonMatch[1]);
+              const parsed = JSON.parse(jsonMatch[1]);
+              extractedMilestones = Array.isArray(parsed) ? parsed : (parsed.milestones || []);
             } catch (e2) {
-              // Try to extract JSON object
+              // Try to extract JSON object directly
               const objMatch = response.match(/\{[\s\S]*"milestones"[\s\S]*\}/);
               if (objMatch) {
-                const parsed = JSON.parse(objMatch[0]);
-                milestones = parsed.milestones || [];
+                try {
+                  const parsed = JSON.parse(objMatch[0]);
+                  extractedMilestones = parsed.milestones || [];
+                } catch (e3) {
+                  console.error('Failed to parse JSON:', e3);
+                  throw new Error('Failed to parse AI response. Please try again.');
+                }
+              } else {
+                throw new Error('Invalid response format from AI. Please try again.');
               }
             }
           } else {
@@ -469,56 +596,96 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
             if (objMatch) {
               try {
                 const parsed = JSON.parse(objMatch[0]);
-                milestones = parsed.milestones || (Array.isArray(parsed) ? parsed : []);
+                extractedMilestones = parsed.milestones || (Array.isArray(parsed) ? parsed : []);
               } catch (e3) {
                 console.error('Failed to parse JSON:', e3);
+                throw new Error('Failed to parse AI response. Please try again.');
               }
+            } else {
+              throw new Error('No valid JSON found in AI response.');
             }
           }
         }
 
-        if (milestones.length === 0) {
-          alert('No milestones could be extracted from the document. Please ensure the document contains dates and milestone information.');
+        if (extractedMilestones.length === 0) {
+          alert('⚠️ No milestones could be extracted from the document.\n\nPlease ensure the document contains:\n- Clear milestone information\n- Dates in any format\n- Construction project details');
           setIsExtracting(false);
           return;
         }
 
-        // Create milestones
+        // Create milestones with validation and normalization
         let createdCount = 0;
-        for (const milestone of milestones) {
-          if (milestone.title && milestone.startDate && milestone.endDate) {
-            // Find appropriate phase or use first available
-            let phaseId = phases[0]?.id || '';
-            
-            // Try to match phase by name if milestone notes mention it
-            if (milestone.notes) {
-              const matchingPhase = phases.find(p => 
-                milestone.notes.toLowerCase().includes(p.name.toLowerCase()) ||
-                milestone.title.toLowerCase().includes(p.name.toLowerCase())
-              );
-              if (matchingPhase) {
-                phaseId = matchingPhase.id;
-              }
-            }
+        let skippedCount = 0;
+        const skippedReasons: string[] = [];
 
+        for (const milestone of extractedMilestones) {
+          // Validate title
+          if (!milestone.title || !milestone.title.trim()) {
+            skippedCount++;
+            skippedReasons.push('Missing title');
+            continue;
+          }
+
+          // Normalize and validate dates
+          let normalizedStart = normalizeDate(milestone.startDate);
+          let normalizedEnd = normalizeDate(milestone.endDate);
+
+          // Support single-date milestones
+          if (normalizedStart && !normalizedEnd) {
+            normalizedEnd = normalizedStart;
+          } else if (normalizedEnd && !normalizedStart) {
+            normalizedStart = normalizedEnd;
+          }
+
+          if (!normalizedStart || !normalizedEnd) {
+            skippedCount++;
+            skippedReasons.push(`"${milestone.title}" - Invalid or missing dates`);
+            continue;
+          }
+
+          // Ensure end date is not before start date
+          const startDate = new Date(normalizedStart);
+          const endDate = new Date(normalizedEnd);
+          if (endDate < startDate) {
+            normalizedEnd = normalizedStart; // Use start date as end date
+          }
+
+          // Find best matching phase
+          const phaseId = findBestPhase(milestone);
+
+          try {
             await addMilestone({
-              title: milestone.title,
-              startDate: milestone.startDate,
-              endDate: milestone.endDate,
+              title: milestone.title.trim(),
+              startDate: normalizedStart,
+              endDate: normalizedEnd,
               phaseId: phaseId,
-              notes: milestone.notes || 'Extracted by AI from document',
+              notes: (milestone.notes || 'Extracted by AI from document').trim(),
             });
             createdCount++;
+          } catch (error: any) {
+            console.error('Error adding milestone:', error);
+            skippedCount++;
+            skippedReasons.push(`"${milestone.title}" - ${error.message || 'Failed to add'}`);
           }
         }
 
+        // Show detailed results
+        let message = '';
         if (createdCount > 0) {
-          alert(`Successfully extracted ${createdCount} milestone(s) using AI!`);
+          message = `✅ Successfully extracted ${createdCount} milestone(s) using AI!`;
+          if (skippedCount > 0) {
+            message += `\n\n⚠️ ${skippedCount} milestone(s) were skipped:\n${skippedReasons.slice(0, 5).join('\n')}${skippedReasons.length > 5 ? `\n... and ${skippedReasons.length - 5} more` : ''}`;
+          }
+        } else {
+          message = `⚠️ No milestones were created.\n\nReasons:\n${skippedReasons.slice(0, 5).join('\n')}${skippedReasons.length > 5 ? `\n... and ${skippedReasons.length - 5} more` : ''}`;
+        }
+
+        alert(message);
+        
+        if (createdCount > 0) {
           setDocumentText('');
           setUploadedFile(null);
           setUrlInput('');
-        } else {
-          alert('AI extracted milestones but they were missing required fields. Please check the document format.');
         }
       } else {
         // Fallback to basic pattern matching if OpenAI is not configured
@@ -556,7 +723,15 @@ Try to match milestones to appropriate phases when possible. Extract dates from 
       }
     } catch (error: any) {
       console.error('Error extracting milestones:', error);
-      alert(`Error extracting milestones: ${error.message || 'Unknown error'}. Please try again or check your OpenAI API key.`);
+      setAiError(error.message || 'Unknown error');
+      
+      let errorMessage = '❌ Error extracting milestones';
+      if (error.message) {
+        errorMessage += `:\n\n${error.message}`;
+      }
+      errorMessage += '\n\nPlease check:\n- Your OpenAI API key is valid\n- You have internet connection\n- The document contains readable text';
+      
+      alert(errorMessage);
     } finally {
       setIsExtracting(false);
     }
