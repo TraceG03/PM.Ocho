@@ -490,9 +490,16 @@ When answering questions:
         // Simple ChatGPT-style prompt for timeline data extraction
         const systemPrompt = `You are a helpful AI assistant. A user has uploaded a document and wants you to extract timeline data from it.
 
-Extract any dates, milestones, tasks, events, or scheduled items from the document and return them in a structured format.
+Your task: Extract ANY dates, milestones, tasks, events, or scheduled items from the document. Be thorough and extract everything you find, even if dates are approximate or in different formats.
 
 Available project phases: ${phases.map(p => p.name).join(', ') || 'None defined'}
+
+IMPORTANT: 
+- Extract everything with a date or timeframe, even if it seems minor
+- Convert dates to YYYY-MM-DD format (handle MM/DD/YYYY, DD-MM-YYYY, "January 15, 2024", etc.)
+- If only one date exists, use it for both startDate and endDate
+- If you see relative dates like "Week 1" or "Month 2", estimate based on today: ${new Date().toISOString().split('T')[0]}
+- Be lenient - extract items even if not perfectly formatted
 
 Return a JSON object with this structure:
 {
@@ -507,7 +514,7 @@ Return a JSON object with this structure:
   ]
 }
 
-Convert all dates to YYYY-MM-DD format. If only one date exists, use it for both start and end dates.`;
+If you find ANY dates or time-related items, extract them. Only return an empty array if there are truly no dates or time-related information in the document.`;
 
         setAiError(null);
         
@@ -519,7 +526,7 @@ Convert all dates to YYYY-MM-DD format. If only one date exists, use it for both
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Please extract all timeline data from this document. Find any dates, milestones, tasks, events, or scheduled items and return them in the requested format:\n\n${textToAnalyze.substring(0, 8000)}` }
+            { role: 'user', content: `Extract all timeline data from this document. Find ANY dates, milestones, tasks, events, or scheduled items - be thorough and extract everything you find. Return them in JSON format:\n\n${textToAnalyze.substring(0, 8000)}` }
           ],
           temperature: 0.4, // Slightly higher for more creative extraction
           max_tokens: 2000,
@@ -574,9 +581,19 @@ Convert all dates to YYYY-MM-DD format. If only one date exists, use it for both
 
         // Log the AI response for debugging
         console.log('AI Response:', response);
+        console.log('AI Response Type:', typeof response);
+        console.log('AI Response Length:', response.length);
         console.log('Extracted Milestones:', extractedMilestones);
+        console.log('Extracted Milestones Length:', extractedMilestones.length);
 
         if (extractedMilestones.length === 0) {
+          // Show the actual AI response to help debug
+          console.error('No milestones extracted. Full AI response:', response);
+          
+          // Check if response contains useful information
+          if (response && response.length > 0 && !response.includes('milestones')) {
+            alert(`⚠️ AI returned a response but no milestones were found.\n\nAI Response preview: ${response.substring(0, 200)}...\n\nCheck the browser console (F12) for full details.`);
+          }
           // Try to extract dates manually as a fallback
           const datePattern = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi;
           const dates = textToAnalyze.match(datePattern);
