@@ -110,3 +110,4 @@ INSERT INTO milestones (id, title, start_date, end_date, phase_id, notes) VALUES
     ('2', 'Frame Walls', '2024-02-16', '2024-03-30', '2', 'Wall framing in progress')
 ON CONFLICT (id) DO NOTHING;
 
+

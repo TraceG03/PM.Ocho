@@ -78,3 +78,4 @@ After adding the API key:
 - Never expose API keys in client-side code
 - Consider using environment variables on your server
 
+
