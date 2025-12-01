@@ -79,6 +79,53 @@ const TimelineView: React.FC = () => {
     new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
   );
 
+  // Calendar view logic
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    // Add all days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    return days;
+  };
+
+  const getMilestonesForDate = (date: Date | null) => {
+    if (!date) return [];
+    return milestones.filter(m => {
+      const start = new Date(m.startDate);
+      const end = new Date(m.endDate);
+      return date >= start && date <= end;
+    });
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentMonth(prev => {
+      const newDate = new Date(prev);
+      if (direction === 'prev') {
+        newDate.setMonth(prev.getMonth() - 1);
+      } else {
+        newDate.setMonth(prev.getMonth() + 1);
+      }
+      return newDate;
+    });
+  };
+
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   return (
     <div className="pb-20 min-h-screen bg-gray-50">
       {/* Header */}
@@ -185,70 +232,170 @@ const TimelineView: React.FC = () => {
         </div>
       </div>
 
-      {/* Milestones List */}
-      <div className="px-4 mt-4 space-y-3">
-        {sortedMilestones.map((milestone) => {
-          const phase = phases.find(p => p.id === milestone.phaseId);
-          return (
-            <div
-              key={milestone.id}
-              className="bg-white rounded-3xl shadow-sm p-4 border-l-4"
-              style={{ borderLeftColor: getPhaseColor(milestone.phaseId) }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span
-                      className="px-3 py-1 rounded-full text-xs font-medium text-white"
-                      style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
-                    >
-                      {phase?.name || 'Unknown Phase'}
-                    </span>
+      {/* View Content */}
+      {viewMode === 'list' ? (
+        /* Milestones List */
+        <div className="px-4 mt-4 space-y-3">
+          {sortedMilestones.map((milestone) => {
+            const phase = phases.find(p => p.id === milestone.phaseId);
+            return (
+              <div
+                key={milestone.id}
+                className="bg-white rounded-3xl shadow-sm p-4 border-l-4"
+                style={{ borderLeftColor: getPhaseColor(milestone.phaseId) }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span
+                        className="px-3 py-1 rounded-full text-xs font-medium text-white"
+                        style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
+                      >
+                        {phase?.name || 'Unknown Phase'}
+                      </span>
+                    </div>
+                    <h3 className="font-semibold text-gray-900 mb-1">{milestone.title}</h3>
+                    <p className="text-sm text-gray-600">
+                      {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
+                    </p>
+                    {milestone.notes && (
+                      <p className="text-sm text-gray-600 mt-2">{milestone.notes}</p>
+                    )}
                   </div>
-                  <h3 className="font-semibold text-gray-900 mb-1">{milestone.title}</h3>
-                  <p className="text-sm text-gray-600">
-                    {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
-                  </p>
-                  {milestone.notes && (
-                    <p className="text-sm text-gray-600 mt-2">{milestone.notes}</p>
-                  )}
-                </div>
-                <div className="flex gap-2 ml-2">
-                  <button
-                    onClick={() => {
-                      setMilestoneForm({
-                        title: milestone.title,
-                        startDate: milestone.startDate,
-                        endDate: milestone.endDate,
-                        phaseId: milestone.phaseId,
-                        notes: milestone.notes,
-                      });
-                      setEditingMilestoneId(milestone.id);
-                      setShowAddMilestone(true);
-                    }}
-                    className="p-2 text-gray-400 hover:text-gray-600"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await deleteMilestone(milestone.id);
-                      } catch (error) {
-                        console.error('Error deleting milestone:', error);
-                        alert('Failed to delete milestone. Please try again.');
-                      }
-                    }}
-                    className="p-2 text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex gap-2 ml-2">
+                    <button
+                      onClick={() => {
+                        setMilestoneForm({
+                          title: milestone.title,
+                          startDate: milestone.startDate,
+                          endDate: milestone.endDate,
+                          phaseId: milestone.phaseId,
+                          notes: milestone.notes,
+                        });
+                        setEditingMilestoneId(milestone.id);
+                        setShowAddMilestone(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-gray-600"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await deleteMilestone(milestone.id);
+                        } catch (error) {
+                          console.error('Error deleting milestone:', error);
+                          alert('Failed to delete milestone. Please try again.');
+                        }
+                      }}
+                      className="p-2 text-gray-400 hover:text-red-500"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Calendar View */
+        <div className="px-4 mt-4">
+          <div className="bg-white rounded-3xl shadow-sm p-4">
+            {/* Calendar Header */}
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => navigateMonth('prev')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <h2 className="text-lg font-bold text-gray-900">
+                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
+              </h2>
+              <button
+                onClick={() => navigateMonth('next')}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
             </div>
-          );
-        })}
-      </div>
+
+            {/* Day Names */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {dayNames.map(day => (
+                <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {getDaysInMonth(currentMonth).map((date, index) => {
+                const dayMilestones = getMilestonesForDate(date);
+                const isToday = date && date.toDateString() === new Date().toDateString();
+                
+                return (
+                  <div
+                    key={index}
+                    className={`min-h-[80px] p-1 border border-gray-200 rounded-lg ${
+                      date ? 'bg-white hover:bg-gray-50' : 'bg-gray-50'
+                    } ${isToday ? 'ring-2 ring-accent-purple' : ''}`}
+                  >
+                    {date && (
+                      <>
+                        <div className={`text-sm font-medium mb-1 ${isToday ? 'text-accent-purple' : 'text-gray-900'}`}>
+                          {date.getDate()}
+                        </div>
+                        <div className="space-y-1">
+                          {dayMilestones.slice(0, 2).map(milestone => (
+                            <div
+                              key={milestone.id}
+                              className="text-xs px-1 py-0.5 rounded text-white truncate"
+                              style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
+                              title={milestone.title}
+                            >
+                              {milestone.title}
+                            </div>
+                          ))}
+                          {dayMilestones.length > 2 && (
+                            <div className="text-xs text-gray-500 px-1">
+                              +{dayMilestones.length - 2} more
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            {phases.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <p className="text-xs font-medium text-gray-500 mb-2">Legend:</p>
+                <div className="flex flex-wrap gap-2">
+                  {phases.map(phase => (
+                    <div key={phase.id} className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded"
+                        style={{ backgroundColor: phase.color }}
+                      />
+                      <span className="text-xs text-gray-600">{phase.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Manage Phases Modal */}
       {showManagePhases && (

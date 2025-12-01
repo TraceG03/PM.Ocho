@@ -27,12 +27,14 @@ const AIAssistantView: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [documentText, setDocumentText] = useState('');
   const [urlInput, setUrlInput] = useState('');
+  const [asanaApiKey, setAsanaApiKey] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isFetchingUrl, setIsFetchingUrl] = useState(false);
+  const [isFetchingAsana, setIsFetchingAsana] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -416,13 +418,77 @@ When answering questions:
     }
   };
 
+  // Fetch tasks from Asana API
+  const fetchAsanaTasks = async (url: string, apiKey: string): Promise<string> => {
+    try {
+      setIsFetchingAsana(true);
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Invalid Asana API key. Please check your API key.');
+        }
+        throw new Error(`Asana API error: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      // Convert Asana tasks to readable text format for AI extraction
+      if (data.data && Array.isArray(data.data)) {
+        const tasksText = data.data.map((task: any) => {
+          const dueDate = task.due_on || task.due_at || 'No due date';
+          const name = task.name || 'Unnamed task';
+          const notes = task.notes || '';
+          const completed = task.completed ? 'Completed' : 'Incomplete';
+          return `${name} - Due: ${dueDate} - Status: ${completed}${notes ? ` - Notes: ${notes}` : ''}`;
+        }).join('\n');
+        
+        return `Asana Project Tasks:\n\n${tasksText}`;
+      }
+      
+      return JSON.stringify(data, null, 2);
+    } catch (error: any) {
+      throw new Error(`Failed to fetch from Asana: ${error.message}`);
+    } finally {
+      setIsFetchingAsana(false);
+    }
+  };
+
   const handleFetchUrl = async () => {
     if (!urlInput.trim()) {
       alert('Please enter a URL');
       return;
     }
 
-    // Validate URL format
+    // Check if it's an Asana API URL
+    const isAsanaUrl = urlInput.includes('asana.com/api');
+    
+    if (isAsanaUrl) {
+      if (!asanaApiKey.trim()) {
+        alert('Asana API key is required for Asana URLs. Please enter your Asana Personal Access Token.');
+        return;
+      }
+      
+      try {
+        setIsFetchingUrl(true);
+        const content = await fetchAsanaTasks(urlInput.trim(), asanaApiKey.trim());
+        setDocumentText(content);
+        setUrlInput('');
+        alert('Asana tasks fetched successfully! You can now extract milestones.');
+      } catch (error: any) {
+        alert(`Failed to fetch from Asana: ${error.message}`);
+      } finally {
+        setIsFetchingUrl(false);
+      }
+      return;
+    }
+
+    // Validate URL format for regular URLs
     try {
       new URL(urlInput.trim());
     } catch {
@@ -887,20 +953,37 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Or enter a URL to fetch content
               </label>
-              <div className="flex gap-2">
+              <div className="space-y-2">
                 <input
                   type="url"
                   value={urlInput}
                   onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="https://example.com/document.pdf"
-                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+                  placeholder="https://example.com/document.pdf or Asana API URL"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
                 />
+                {urlInput.includes('asana.com/api') && (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Asana Personal Access Token (required for Asana API)
+                    </label>
+                    <input
+                      type="password"
+                      value={asanaApiKey}
+                      onChange={(e) => setAsanaApiKey(e.target.value)}
+                      placeholder="Enter your Asana API key"
+                      className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Get your token from: <a href="https://app.asana.com/0/my-apps" target="_blank" rel="noopener noreferrer" className="text-accent-purple underline">Asana Developer Settings</a>
+                    </p>
+                  </div>
+                )}
                 <button
                   onClick={handleFetchUrl}
-                  disabled={isFetchingUrl || !urlInput.trim()}
-                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  disabled={(isFetchingUrl || isFetchingAsana) || !urlInput.trim() || (urlInput.includes('asana.com/api') && !asanaApiKey.trim())}
+                  className="w-full px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {isFetchingUrl ? (
+                  {(isFetchingUrl || isFetchingAsana) ? (
                     <>
                       <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
                       <span>Fetching...</span>
