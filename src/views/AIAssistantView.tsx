@@ -303,26 +303,135 @@ When answering questions:
     }
   };
 
+  // Parse Microsoft Project XML file
+  const parseMicrosoftProjectXML = async (xmlContent: string): Promise<string> => {
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      
+      // Check for parsing errors
+      const parserError = xmlDoc.querySelector('parsererror');
+      if (parserError) {
+        throw new Error('Invalid XML format');
+      }
+      
+      // Extract project info
+      const projectTitle = xmlDoc.querySelector('Project > Title')?.textContent || 'Project';
+      const projectStart = xmlDoc.querySelector('Project > StartDate')?.textContent || '';
+      
+      // Extract all tasks
+      const tasks = xmlDoc.querySelectorAll('Project > Tasks > Task');
+      const taskList: string[] = [];
+      
+      taskList.push(`Project: ${projectTitle}`);
+      if (projectStart) {
+        const formattedStart = projectStart.split('T')[0];
+        taskList.push(`Project Start Date: ${formattedStart}`);
+      }
+      taskList.push('\nTasks:\n');
+      
+      tasks.forEach((task, index) => {
+        const name = task.querySelector('Name')?.textContent || `Task ${index + 1}`;
+        const startDate = task.querySelector('Start')?.textContent || task.querySelector('ManualStart')?.textContent || '';
+        const duration = task.querySelector('Duration')?.textContent || task.querySelector('ManualDuration')?.textContent || '';
+        const isMilestone = task.querySelector('Milestone')?.textContent === '1';
+        const finishDate = task.querySelector('Finish')?.textContent || task.querySelector('ManualFinish')?.textContent || '';
+        
+        if (!startDate) return; // Skip tasks without start dates
+        
+        let endDate = finishDate;
+        
+        // Calculate end date from duration if finish date is missing
+        if (!endDate && duration && duration !== 'PT0H0M0S') {
+          // Parse ISO 8601 duration format: PT8H0M0S = 8 hours
+          const durationMatch = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+          if (durationMatch) {
+            const hours = parseInt(durationMatch[1] || '0', 10);
+            const minutes = parseInt(durationMatch[2] || '0', 10);
+            const seconds = parseInt(durationMatch[3] || '0', 10);
+            
+            // Convert to days (assuming 8-hour work days)
+            const totalHours = hours + (minutes / 60) + (seconds / 3600);
+            const days = Math.ceil(totalHours / 8);
+            
+            if (days > 0) {
+              const start = new Date(startDate);
+              start.setDate(start.getDate() + days);
+              endDate = start.toISOString().split('T')[0];
+            }
+          }
+        }
+        
+        // Format date strings (remove time if present)
+        const formattedStart = startDate.split('T')[0];
+        const formattedEnd = endDate ? endDate.split('T')[0] : formattedStart;
+        
+        let taskLine = `${name}`;
+        if (isMilestone) {
+          taskLine += ' [MILESTONE]';
+        }
+        taskLine += ` - Start: ${formattedStart}`;
+        if (formattedEnd && formattedEnd !== formattedStart) {
+          taskLine += `, End: ${formattedEnd}`;
+        } else {
+          taskLine += `, End: ${formattedStart}`;
+        }
+        if (duration && duration !== 'PT0H0M0S') {
+          taskLine += `, Duration: ${duration}`;
+        }
+        
+        taskList.push(taskLine);
+      });
+      
+      return taskList.join('\n');
+    } catch (error: any) {
+      throw new Error(`Failed to parse XML: ${error.message}`);
+    }
+  };
+
   const processFile = async (file: File) => {
     if (!file) return;
     setUploading(true);
     try {
       const uploadedFileObj = await uploadFile(file);
       setUploadedFile(uploadedFileObj.id);
-      if (file.type === 'text/plain') {
-        const fileData = getFile(uploadedFileObj.id);
-        if (fileData) {
-          try {
-            const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
-            if (base64Match) {
-              setDocumentText(atob(base64Match[1]));
-            }
-          } catch (e) {
-            setDocumentText(`Document "${file.name}" uploaded.`);
+      
+      const fileData = getFile(uploadedFileObj.id);
+      if (!fileData) return;
+      
+      // Handle XML files (Microsoft Project)
+      if (file.type === 'application/xml' || file.type === 'text/xml' || file.name.endsWith('.xml')) {
+        try {
+          const base64Match = fileData.dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+          if (base64Match) {
+            const xmlContent = atob(base64Match[1]);
+            const parsedContent = await parseMicrosoftProjectXML(xmlContent);
+            setDocumentText(parsedContent);
+            alert('✅ Microsoft Project XML file parsed successfully! Click "Extract Milestones with AI" to add tasks to your timeline.');
           }
+        } catch (e: any) {
+          console.error('Error parsing XML:', e);
+          setDocumentText(`XML file "${file.name}" uploaded. Error parsing: ${e.message}. Please paste the XML content manually.`);
         }
-      } else {
-        setDocumentText(`Document "${file.name}" uploaded. Please paste the content below.`);
+      }
+      // Handle text files
+      else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        try {
+          const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
+          if (base64Match) {
+            setDocumentText(atob(base64Match[1]));
+          }
+        } catch (e) {
+          setDocumentText(`Document "${file.name}" uploaded.`);
+        }
+      } 
+      // Handle PDFs
+      else if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        setDocumentText(`PDF file "${file.name}" uploaded. Please paste the text content from this PDF below, or use a URL to a text version of the document.`);
+      } 
+      // Handle other file types
+      else {
+        setDocumentText(`File "${file.name}" (${file.type}) uploaded. Please paste the relevant text content from this file below.`);
       }
     } catch (error) {
       alert('Failed to upload file.');
