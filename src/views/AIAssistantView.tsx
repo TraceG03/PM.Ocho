@@ -534,14 +534,35 @@ When answering questions:
       // If we have an uploaded file, try to get its content
       if (uploadedFile && !textToAnalyze.trim()) {
         const fileData = getFile(uploadedFile);
-        if (fileData && fileData.type === 'text/plain') {
+        if (fileData) {
           try {
-            const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
-            if (base64Match) {
-              textToAnalyze = atob(base64Match[1]);
+            // Try to extract text from various file types
+            if (fileData.type === 'text/plain' || fileData.name.endsWith('.txt')) {
+              const base64Match = fileData.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
+              if (base64Match) {
+                textToAnalyze = atob(base64Match[1]);
+              }
+            } else if (fileData.type === 'application/pdf' || fileData.name.endsWith('.pdf')) {
+              // For PDFs, we can't extract text directly in the browser without a library
+              // But we can try to get metadata or prompt user to paste content
+              textToAnalyze = `PDF file "${fileData.name}" uploaded. Please paste the text content from this PDF below, or use a URL to a text version of the document.`;
+            } else if (fileData.type.includes('text/') || fileData.name.match(/\.(txt|md|html|htm)$/i)) {
+              // Try to extract from any text-based file
+              const base64Match = fileData.dataUrl.match(/^data:[^;]+;base64,(.+)$/);
+              if (base64Match) {
+                try {
+                  textToAnalyze = atob(base64Match[1]);
+                } catch (e) {
+                  console.error('Error decoding file:', e);
+                }
+              }
+            } else {
+              // For other file types, prompt user to paste content
+              textToAnalyze = `File "${fileData.name}" (${fileData.type}) uploaded. Please paste the relevant text content from this file below.`;
             }
           } catch (e) {
             console.error('Error reading file:', e);
+            textToAnalyze = `File "${fileData.name}" uploaded. Please paste the text content from this file below.`;
           }
         }
       }
@@ -655,20 +676,32 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
         if (extractedMilestones.length === 0) {
           // Show the actual AI response to help debug
           console.error('No milestones extracted. Full AI response:', response);
+          console.error('Document preview (first 500 chars):', textToAnalyze.substring(0, 500));
           
-          // Check if response contains useful information
-          if (response && response.length > 0 && !response.includes('milestones')) {
-            alert(`⚠️ AI returned a response but no milestones were found.\n\nAI Response preview: ${response.substring(0, 200)}...\n\nCheck the browser console (F12) for full details.`);
-          }
-          // Try to extract dates manually as a fallback
-          const datePattern = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi;
+          // Try to extract dates manually as a fallback to provide helpful feedback
+          const datePattern = /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}/gi;
           const dates = textToAnalyze.match(datePattern);
           
+          // Check if response contains useful information
+          if (response && response.length > 0) {
+            // Try to parse what the AI actually returned
+            try {
+              const parsed = JSON.parse(response);
+              if (parsed && typeof parsed === 'object' && !parsed.milestones) {
+                // AI returned something but not milestones
+                console.warn('AI returned object without milestones:', parsed);
+              }
+            } catch (e) {
+              // Response is not valid JSON
+              console.warn('AI response is not valid JSON:', response.substring(0, 200));
+            }
+          }
+          
           if (dates && dates.length > 0) {
-            const fallbackMessage = `⚠️ AI couldn't extract structured milestones, but found ${dates.length} date(s) in the document:\n\n${dates.slice(0, 5).join(', ')}${dates.length > 5 ? '...' : ''}\n\nPlease try:\n- Adding more context about milestones in the document\n- Ensuring dates are clearly associated with milestone descriptions\n- Using a document with explicit milestone information`;
+            const fallbackMessage = `⚠️ AI couldn't extract structured milestones, but found ${dates.length} date(s) in the document:\n\n${dates.slice(0, 5).join(', ')}${dates.length > 5 ? `\n... and ${dates.length - 5} more` : ''}\n\nPlease try:\n- Adding more context about milestones (e.g., "Foundation Complete: January 15, 2024")\n- Ensuring dates are clearly associated with milestone descriptions\n- Using a document with explicit milestone information\n- Check the browser console (F12) for more details`;
             alert(fallbackMessage);
           } else {
-            alert('⚠️ No milestones could be extracted from the document.\n\nPossible reasons:\n- Document doesn\'t contain clear milestone information\n- Dates are not present or not clearly formatted\n- Document may need more construction-specific context\n\nTips:\n- Include milestone names with dates (e.g., "Foundation Complete: January 15, 2024")\n- Use explicit project timeline language\n- Ensure dates are in a recognizable format');
+            alert('⚠️ No milestones could be extracted from the document.\n\nPossible reasons:\n- Document doesn\'t contain clear milestone information\n- Dates are not present or not clearly formatted\n- Document may need more construction-specific context\n\nTips:\n- Include milestone names with dates (e.g., "Foundation Complete: January 15, 2024")\n- Use explicit project timeline language\n- Ensure dates are in a recognizable format (MM/DD/YYYY, DD-MM-YYYY, or "Month Day, Year")\n- Check the browser console (F12) for debugging information');
           }
           setIsExtracting(false);
           return;
@@ -730,15 +763,35 @@ If you find ANY dates or time-related items, extract them. Only return an empty 
           }
         }
 
-        // Show detailed results
+        // Show detailed results with better formatting
         let message = '';
         if (createdCount > 0) {
           message = `✅ Successfully extracted ${createdCount} milestone(s) using AI!`;
-          if (skippedCount > 0) {
-            message += `\n\n⚠️ ${skippedCount} milestone(s) were skipped:\n${skippedReasons.slice(0, 5).join('\n')}${skippedReasons.length > 5 ? `\n... and ${skippedReasons.length - 5} more` : ''}`;
+          if (createdCount === 1) {
+            message = `✅ Successfully extracted 1 milestone using AI!`;
           }
+          if (skippedCount > 0) {
+            message += `\n\n⚠️ ${skippedCount} milestone(s) were skipped:`;
+            skippedReasons.slice(0, 5).forEach((reason, idx) => {
+              message += `\n${idx + 1}. ${reason}`;
+            });
+            if (skippedReasons.length > 5) {
+              message += `\n... and ${skippedReasons.length - 5} more`;
+            }
+          }
+          message += `\n\nYou can view the extracted milestones in the Timeline view.`;
         } else {
-          message = `⚠️ No milestones were created.\n\nReasons:\n${skippedReasons.slice(0, 5).join('\n')}${skippedReasons.length > 5 ? `\n... and ${skippedReasons.length - 5} more` : ''}`;
+          message = `⚠️ No milestones were created from the extracted data.`;
+          if (skippedReasons.length > 0) {
+            message += `\n\nReasons:`;
+            skippedReasons.slice(0, 5).forEach((reason, idx) => {
+              message += `\n${idx + 1}. ${reason}`;
+            });
+            if (skippedReasons.length > 5) {
+              message += `\n... and ${skippedReasons.length - 5} more`;
+            }
+          }
+          message += `\n\nPlease check:\n- The document contains valid dates\n- Milestone titles are present\n- Dates are in a recognizable format`;
         }
 
         alert(message);
@@ -983,34 +1036,41 @@ Inspection required by August 1`}
               className="w-full px-4 py-4 rounded-2xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-gray-50 text-gray-700 placeholder-gray-400"
             />
 
-            {/* URL Input (Hidden by default, can be shown if needed) */}
-            {urlInput && (
-              <div className="mt-3">
+            {/* URL Input - Always visible but subtle */}
+            <div className="mt-3">
+              <input
+                type="url"
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="Or enter a URL to fetch content from..."
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
+              />
+              {urlInput.includes('asana.com/api') && (
                 <input
-                  type="url"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder="Or enter a URL..."
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                  type="password"
+                  value={asanaApiKey}
+                  onChange={(e) => setAsanaApiKey(e.target.value)}
+                  placeholder="Asana API Key (Personal Access Token)"
+                  className="w-full mt-2 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white"
                 />
-                {urlInput.includes('asana.com/api') && (
-                  <input
-                    type="password"
-                    value={asanaApiKey}
-                    onChange={(e) => setAsanaApiKey(e.target.value)}
-                    placeholder="Asana API Key"
-                    className="w-full mt-2 px-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
-                )}
+              )}
+              {urlInput.trim() && (
                 <button
                   onClick={handleFetchUrl}
                   disabled={(isFetchingUrl || isFetchingAsana) || !urlInput.trim()}
-                  className="mt-2 w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 text-sm"
+                  className="mt-2 w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-50 text-sm font-medium"
                 >
-                  {(isFetchingUrl || isFetchingAsana) ? 'Fetching...' : 'Fetch URL'}
+                  {(isFetchingUrl || isFetchingAsana) ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                      Fetching...
+                    </span>
+                  ) : (
+                    'Fetch URL Content'
+                  )}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Extract Button */}
             <button

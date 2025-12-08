@@ -53,3 +53,4 @@ npm install @supabase/supabase-js
 - Check the Table Editor to see if data exists
 
 
+

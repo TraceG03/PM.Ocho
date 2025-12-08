@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, List, Plus, Edit, Trash2, X } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp, presetColors } from '../context/AppContext';
 
 const TimelineView: React.FC = () => {
@@ -79,52 +79,93 @@ const TimelineView: React.FC = () => {
     new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
   );
 
-  // Calendar view logic
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  
-  const getDaysInMonth = (date: Date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+  // Asana-style Timeline view logic
+  const [zoomLevel, setZoomLevel] = useState(1); // 1 = days, 2 = weeks, 3 = months
+  const [scrollPosition, setScrollPosition] = useState(0);
+  const timelineRef = useRef<HTMLDivElement>(null);
+
+  // Calculate timeline range based on milestones
+  const getTimelineRange = () => {
+    if (milestones.length === 0) {
+      const start = new Date();
+      start.setDate(1);
+      const end = new Date();
+      end.setMonth(end.getMonth() + 3);
+      return { start, end };
+    }
+
+    const dates = milestones.flatMap(m => [
+      new Date(m.startDate),
+      new Date(m.endDate)
+    ]);
+    const start = new Date(Math.min(...dates.map(d => d.getTime())));
+    const end = new Date(Math.max(...dates.map(d => d.getTime())));
     
-    const days = [];
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < startingDayOfWeek; i++) {
-      days.push(null);
-    }
-    // Add all days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      days.push(new Date(year, month, day));
-    }
-    return days;
+    // Add padding
+    start.setDate(start.getDate() - 7);
+    end.setDate(end.getDate() + 7);
+    
+    return { start, end };
   };
 
-  const getMilestonesForDate = (date: Date | null) => {
-    if (!date) return [];
-    return milestones.filter(m => {
-      const start = new Date(m.startDate);
-      const end = new Date(m.endDate);
-      return date >= start && date <= end;
-    });
-  };
+  const { start: timelineStart, end: timelineEnd } = getTimelineRange();
 
-  const navigateMonth = (direction: 'prev' | 'next') => {
-    setCurrentMonth(prev => {
-      const newDate = new Date(prev);
-      if (direction === 'prev') {
-        newDate.setMonth(prev.getMonth() - 1);
-      } else {
-        newDate.setMonth(prev.getMonth() + 1);
+  // Generate date headers based on zoom level
+  const getDateHeaders = () => {
+    const headers: Date[] = [];
+    const current = new Date(timelineStart);
+    
+    if (zoomLevel === 1) {
+      // Daily view
+      while (current <= timelineEnd) {
+        headers.push(new Date(current));
+        current.setDate(current.getDate() + 1);
       }
-      return newDate;
-    });
+    } else if (zoomLevel === 2) {
+      // Weekly view
+      while (current <= timelineEnd) {
+        headers.push(new Date(current));
+        current.setDate(current.getDate() + 7);
+      }
+    } else {
+      // Monthly view
+      while (current <= timelineEnd) {
+        headers.push(new Date(current));
+        current.setMonth(current.getMonth() + 1);
+      }
+    }
+    
+    return headers;
   };
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  // Calculate position and width of milestone bar
+  const getMilestonePosition = (milestone: typeof milestones[0]) => {
+    const start = new Date(milestone.startDate);
+    const end = new Date(milestone.endDate);
+    const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const milestoneStart = Math.ceil((start.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const milestoneDuration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    const left = (milestoneStart / totalDays) * 100;
+    const width = (milestoneDuration / totalDays) * 100;
+    
+    return { left: `${left}%`, width: `${width}%` };
+  };
+
+  // Get today's position
+  const getTodayPosition = () => {
+    const today = new Date();
+    if (today < timelineStart || today > timelineEnd) return null;
+    
+    const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const todayDays = Math.ceil((today.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const position = (todayDays / totalDays) * 100;
+    
+    return `${position}%`;
+  };
+
+  const todayPosition = getTodayPosition();
+  const dateHeaders = getDateHeaders();
 
   return (
     <div className="pb-20 min-h-screen bg-gray-50">
@@ -299,88 +340,150 @@ const TimelineView: React.FC = () => {
           })}
         </div>
       ) : (
-        /* Calendar View */
+        /* Asana-style Timeline View */
         <div className="px-4 mt-4">
-          <div className="bg-white rounded-3xl shadow-sm p-4">
-            {/* Calendar Header */}
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => navigateMonth('prev')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <h2 className="text-lg font-bold text-gray-900">
-                {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
-              </h2>
-              <button
-                onClick={() => navigateMonth('next')}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
+          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
+            {/* Timeline Controls */}
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setZoomLevel(prev => Math.max(1, prev - 1))}
+                  disabled={zoomLevel === 1}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <ZoomOut size={18} className="text-gray-600" />
+                </button>
+                <span className="text-sm text-gray-600 min-w-[80px] text-center">
+                  {zoomLevel === 1 ? 'Days' : zoomLevel === 2 ? 'Weeks' : 'Months'}
+                </span>
+                <button
+                  onClick={() => setZoomLevel(prev => Math.min(3, prev + 1))}
+                  disabled={zoomLevel === 3}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <ZoomIn size={18} className="text-gray-600" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setScrollPosition(prev => Math.max(0, prev - 200))}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ChevronLeft size={18} className="text-gray-600" />
+                </button>
+                <button
+                  onClick={() => setScrollPosition(prev => prev + 200)}
+                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <ChevronRight size={18} className="text-gray-600" />
+                </button>
+              </div>
             </div>
 
-            {/* Day Names */}
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {dayNames.map(day => (
-                <div key={day} className="text-center text-xs font-medium text-gray-500 py-2">
-                  {day}
-                </div>
-              ))}
-            </div>
-
-            {/* Calendar Grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {getDaysInMonth(currentMonth).map((date, index) => {
-                const dayMilestones = getMilestonesForDate(date);
-                const isToday = date && date.toDateString() === new Date().toDateString();
-                
-                return (
-                  <div
-                    key={index}
-                    className={`min-h-[80px] p-1 border border-gray-200 rounded-lg ${
-                      date ? 'bg-white hover:bg-gray-50' : 'bg-gray-50'
-                    } ${isToday ? 'ring-2 ring-accent-purple' : ''}`}
-                  >
-                    {date && (
-                      <>
-                        <div className={`text-sm font-medium mb-1 ${isToday ? 'text-accent-purple' : 'text-gray-900'}`}>
-                          {date.getDate()}
-                        </div>
-                        <div className="space-y-1">
-                          {dayMilestones.slice(0, 2).map(milestone => (
-                            <div
-                              key={milestone.id}
-                              className="text-xs px-1 py-0.5 rounded text-white truncate"
-                              style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
-                              title={milestone.title}
-                            >
-                              {milestone.title}
-                            </div>
-                          ))}
-                          {dayMilestones.length > 2 && (
-                            <div className="text-xs text-gray-500 px-1">
-                              +{dayMilestones.length - 2} more
+            {/* Timeline Container */}
+            <div className="overflow-x-auto" ref={timelineRef}>
+              <div className="min-w-full" style={{ transform: `translateX(-${scrollPosition}px)` }}>
+                {/* Date Headers */}
+                <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
+                  <div className="flex" style={{ minWidth: `${dateHeaders.length * (zoomLevel === 1 ? 40 : zoomLevel === 2 ? 60 : 80)}px` }}>
+                    {dateHeaders.map((date, index) => {
+                      const isToday = date.toDateString() === new Date().toDateString();
+                      return (
+                        <div
+                          key={index}
+                          className="border-r border-gray-200 p-2 text-center"
+                          style={{ minWidth: zoomLevel === 1 ? '40px' : zoomLevel === 2 ? '60px' : '80px' }}
+                        >
+                          <div className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
+                            {zoomLevel === 1 
+                              ? date.getDate()
+                              : zoomLevel === 2
+                              ? `Week ${Math.ceil(date.getDate() / 7)}`
+                              : date.toLocaleDateString('en-US', { month: 'short' })
+                            }
+                          </div>
+                          {zoomLevel === 1 && (
+                            <div className="text-xs text-gray-400 mt-1">
+                              {date.toLocaleDateString('en-US', { weekday: 'short' })}
                             </div>
                           )}
                         </div>
-                      </>
-                    )}
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+
+                {/* Timeline Rows */}
+                <div className="relative" style={{ minHeight: `${sortedMilestones.length * 60 + 20}px` }}>
+                  {/* Today Indicator Line */}
+                  {todayPosition && (
+                    <div
+                      className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
+                      style={{ left: todayPosition }}
+                    >
+                      <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded">
+                        Today
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Milestone Bars */}
+                  {sortedMilestones.map((milestone) => {
+                    const position = getMilestonePosition(milestone);
+                    
+                    return (
+                      <div
+                        key={milestone.id}
+                        className="relative border-b border-gray-100"
+                        style={{ height: '60px' }}
+                      >
+                        {/* Milestone Label */}
+                        <div className="absolute left-0 top-0 bottom-0 w-32 bg-white border-r border-gray-200 flex items-center px-3 z-10">
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <div
+                              className="w-3 h-3 rounded flex-shrink-0"
+                              style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
+                            />
+                            <span className="text-sm font-medium text-gray-900 truncate" title={milestone.title}>
+                              {milestone.title}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Milestone Bar */}
+                        <div className="ml-32 relative h-full">
+                          <div
+                            className="absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                            style={{
+                              backgroundColor: getPhaseColor(milestone.phaseId),
+                              left: position.left,
+                              width: position.width,
+                              minWidth: '60px'
+                            }}
+                            title={`${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()})`}
+                          >
+                            <span className="truncate">{milestone.title}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Empty State */}
+                  {sortedMilestones.length === 0 && (
+                    <div className="flex items-center justify-center h-40 text-gray-400">
+                      <p>No milestones yet. Add milestones to see them on the timeline.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Legend */}
             {phases.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="p-4 border-t border-gray-200">
                 <p className="text-xs font-medium text-gray-500 mb-2">Legend:</p>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-3">
                   {phases.map(phase => (
                     <div key={phase.id} className="flex items-center gap-2">
                       <div
