@@ -348,6 +348,97 @@ When answering questions:
     if (files && files.length > 0) await processFile(files[0]);
   };
 
+  // Enhanced HTML parsing for project management tools
+  const extractProjectManagementData = (html: string, url: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Remove unwanted elements
+    const unwanted = tempDiv.querySelectorAll('script, style, nav, header, footer, aside, .ad, .advertisement, [class*="ad"]');
+    unwanted.forEach(el => el.remove());
+    
+    // Detect project management tool type (for future enhancements)
+    // const isProjectManager = url.includes('projectmanager.com') || url.includes('projectmanager');
+    // const isMonday = url.includes('monday.com');
+    // const isSmartsheet = url.includes('smartsheet.com');
+    // const isWrike = url.includes('wrike.com');
+    // const isTrello = url.includes('trello.com');
+    // const isJira = url.includes('atlassian.com') || url.includes('jira');
+    // const isAsana = url.includes('asana.com');
+    // const isClickUp = url.includes('clickup.com');
+    // const isBasecamp = url.includes('basecamp.com');
+    
+    let extractedText = '';
+    
+    // Try to extract structured data from common project management patterns
+    // Look for timeline, gantt, task, milestone, schedule elements
+    const timelineSelectors = [
+      '[class*="timeline"]',
+      '[class*="gantt"]',
+      '[class*="task"]',
+      '[class*="milestone"]',
+      '[class*="schedule"]',
+      '[class*="project"]',
+      '[class*="phase"]',
+      '[id*="timeline"]',
+      '[id*="gantt"]',
+      '[id*="task"]',
+      '[data-testid*="task"]',
+      '[data-testid*="timeline"]',
+      'table',
+      '[role="row"]',
+      '[role="gridcell"]',
+    ];
+    
+    // Try to find timeline/task related content
+    let foundContent = false;
+    for (const selector of timelineSelectors) {
+      const elements = tempDiv.querySelectorAll(selector);
+      if (elements.length > 0) {
+        elements.forEach((el, idx) => {
+          if (idx < 50) { // Limit to first 50 elements to avoid too much data
+            const text = el.textContent || (el as HTMLElement).innerText || '';
+            if (text.trim().length > 10) { // Only include substantial text
+              extractedText += text.trim() + '\n';
+              foundContent = true;
+            }
+          }
+        });
+        if (foundContent) break;
+      }
+    }
+    
+    // If no specific timeline content found, extract all meaningful text
+    if (!foundContent || extractedText.length < 100) {
+      // Extract paragraphs and list items that might contain timeline info
+      const contentElements = tempDiv.querySelectorAll('p, li, td, th, [class*="card"], [class*="item"], [class*="row"]');
+      contentElements.forEach(el => {
+        const text = el.textContent || (el as HTMLElement).innerText || '';
+        // Look for date patterns or task-like content
+        if (text.match(/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}/i) ||
+            text.length > 20 && text.length < 500) {
+          extractedText += text.trim() + '\n';
+        }
+      });
+    }
+    
+    // Fallback: extract all text if still not enough
+    if (extractedText.length < 200) {
+      extractedText = tempDiv.textContent || tempDiv.innerText || '';
+    }
+    
+    // Clean up the extracted text
+    extractedText = extractedText
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\n{3,}/g, '\n\n') // Remove excessive newlines
+      .trim();
+    
+    // Add context about the source
+    const sourceInfo = `Content extracted from: ${url}\n\n`;
+    
+    return sourceInfo + extractedText;
+  };
+
   // Fetch content from URL
   const fetchUrlContent = async (url: string): Promise<string> => {
     try {
@@ -356,6 +447,7 @@ When answering questions:
         mode: 'cors',
         headers: {
           'Accept': 'text/html,application/xhtml+xml,application/xml,text/plain,*/*',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         }
       });
       
@@ -370,17 +462,9 @@ When answering questions:
         const json = await response.json();
         text = JSON.stringify(json, null, 2);
       } else if (contentType.includes('text/html')) {
-        // For HTML, extract text content
+        // For HTML, use enhanced extraction
         const html = await response.text();
-        // Simple HTML to text conversion (remove tags and decode entities)
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = html;
-        // Remove script and style elements
-        const scripts = tempDiv.querySelectorAll('script, style');
-        scripts.forEach(el => el.remove());
-        text = tempDiv.textContent || tempDiv.innerText || '';
-        // Clean up extra whitespace
-        text = text.replace(/\s+/g, ' ').trim();
+        text = extractProjectManagementData(html, url);
       } else {
         // For plain text or other types
         text = await response.text();
@@ -389,7 +473,7 @@ When answering questions:
       return text;
     } catch (error: any) {
       // If direct fetch fails due to CORS, try using a CORS proxy
-      if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+      if (error.message.includes('CORS') || error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
         try {
           const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
           const proxyResponse = await fetch(proxyUrl);
@@ -400,18 +484,20 @@ When answering questions:
           }
           
           const html = data.contents;
-          // Extract text from HTML
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = html;
-          // Remove script and style elements
-          const scripts = tempDiv.querySelectorAll('script, style');
-          scripts.forEach(el => el.remove());
-          let text = tempDiv.textContent || tempDiv.innerText || '';
-          // Clean up extra whitespace
-          text = text.replace(/\s+/g, ' ').trim();
-          return text;
+          // Use enhanced extraction for proxy content too
+          const extractedText = extractProjectManagementData(html, url);
+          return extractedText;
         } catch (proxyError: any) {
-          throw new Error(`Failed to fetch URL: ${error.message}. Please ensure the URL is publicly accessible or paste the content directly.`);
+          // Try alternative proxy
+          try {
+            const altProxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            const altProxyResponse = await fetch(altProxyUrl);
+            const html = await altProxyResponse.text();
+            const extractedText = extractProjectManagementData(html, url);
+            return extractedText;
+          } catch (altError: any) {
+            throw new Error(`Failed to fetch URL: ${error.message}. The page may require authentication or be blocked by CORS. Please try copying the timeline content and pasting it directly.`);
+          }
         }
       }
       throw error;
@@ -489,21 +575,40 @@ When answering questions:
     }
 
     // Validate URL format for regular URLs
+    let validatedUrl = urlInput.trim();
     try {
-      new URL(urlInput.trim());
+      new URL(validatedUrl);
     } catch {
-      alert('Please enter a valid URL (e.g., https://example.com/document)');
-      return;
+      // Try adding https:// if missing
+      if (!validatedUrl.startsWith('http://') && !validatedUrl.startsWith('https://')) {
+        validatedUrl = 'https://' + validatedUrl;
+        try {
+          new URL(validatedUrl);
+        } catch {
+          alert('Please enter a valid URL (e.g., https://example.com/document)');
+          return;
+        }
+      } else {
+        alert('Please enter a valid URL (e.g., https://example.com/document)');
+        return;
+      }
     }
 
     try {
       setIsFetchingUrl(true);
-      const content = await fetchUrlContent(urlInput.trim());
-      setDocumentText(content);
+      const content = await fetchUrlContent(validatedUrl);
+      
+      if (!content || content.trim().length < 50) {
+        alert('⚠️ Limited content extracted from URL. The page may require authentication or have restricted access. Try:\n\n1. Making sure the URL is publicly accessible\n2. Copying the timeline content and pasting it directly\n3. Exporting the timeline as a document and uploading it');
+        setDocumentText(content || '');
+      } else {
+        setDocumentText(content);
+        alert(`✅ Content fetched successfully! Extracted ${content.length} characters. You can now extract milestones.`);
+      }
       setUrlInput('');
-      alert('Content fetched successfully! You can now extract milestones.');
     } catch (error: any) {
-      alert(`Failed to fetch URL: ${error.message}`);
+      const errorMsg = error.message || 'Unknown error';
+      alert(`❌ Failed to fetch URL: ${errorMsg}\n\nTips:\n- Ensure the URL is publicly accessible\n- Some pages require login (try copying content instead)\n- The page may block automated access\n\nAlternative: Copy the timeline content and paste it directly into the text area.`);
     } finally {
       setIsFetchingUrl(false);
     }
