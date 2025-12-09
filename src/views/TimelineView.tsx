@@ -158,16 +158,21 @@ const TimelineView: React.FC = () => {
     const end = new Date(milestone.endDate);
     const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
     
-    // Calculate days from start
-    const startDays = Math.ceil((start.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const endDays = Math.ceil((end.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const duration = Math.max(1, endDays - startDays + 1);
+    // Calculate exact time difference in milliseconds, then convert to days
+    const startTime = start.getTime();
+    const endTime = end.getTime();
+    const timelineStartTime = timelineStart.getTime();
     
-    // Calculate position in pixels
+    // Calculate exact days (using milliseconds for precision)
+    const startDays = (startTime - timelineStartTime) / (1000 * 60 * 60 * 24);
+    const endDays = (endTime - timelineStartTime) / (1000 * 60 * 60 * 24);
+    const duration = Math.max(1, endDays - startDays);
+    
+    // Calculate position in pixels (using exact calculation, not rounded)
     const left = startDays * dayWidth;
     const width = duration * dayWidth;
     
-    return { left: `${left}px`, width: `${width}px` };
+    return { left: `${left}px`, width: `${Math.max(width, 60)}px` };
   };
 
   // Get today's position in pixels
