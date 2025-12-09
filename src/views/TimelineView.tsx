@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, CheckSquare, Square } from 'lucide-react';
 import { useApp, presetColors } from '../context/AppContext';
 
 const TimelineView: React.FC = () => {
@@ -20,6 +20,8 @@ const TimelineView: React.FC = () => {
   const [selectedMilestone, setSelectedMilestone] = useState<string | null>(null);
   const [editingPhase, setEditingPhase] = useState<string | null>(null);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(new Set());
+  const [showBulkActions, setShowBulkActions] = useState(false);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [newPhaseColor, setNewPhaseColor] = useState(presetColors[0]);
   const [milestoneForm, setMilestoneForm] = useState({
@@ -69,6 +71,70 @@ const TimelineView: React.FC = () => {
         console.error('Error saving milestone:', error);
         alert('Failed to save milestone. Please try again.');
       }
+    }
+  };
+
+  // Multi-select handlers
+  const toggleMilestoneSelection = (milestoneId: string) => {
+    setSelectedMilestoneIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(milestoneId)) {
+        newSet.delete(milestoneId);
+      } else {
+        newSet.add(milestoneId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedMilestoneIds.size === sortedMilestones.length) {
+      setSelectedMilestoneIds(new Set());
+    } else {
+      setSelectedMilestoneIds(new Set(sortedMilestones.map(m => m.id)));
+    }
+  };
+
+  const handleBulkPhaseChange = async (newPhaseId: string) => {
+    if (selectedMilestoneIds.size === 0) return;
+    
+    try {
+      // Update all selected milestones
+      const updatePromises = Array.from(selectedMilestoneIds).map(id =>
+        updateMilestone(id, { phaseId: newPhaseId })
+      );
+      
+      await Promise.all(updatePromises);
+      
+      // Clear selection
+      setSelectedMilestoneIds(new Set());
+      setShowBulkActions(false);
+    } catch (error) {
+      console.error('Error updating milestones:', error);
+      alert('Failed to update milestones. Please try again.');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedMilestoneIds.size === 0) return;
+    
+    if (!confirm(`Are you sure you want to delete ${selectedMilestoneIds.size} milestone(s)?`)) {
+      return;
+    }
+    
+    try {
+      const deletePromises = Array.from(selectedMilestoneIds).map(id =>
+        deleteMilestone(id)
+      );
+      
+      await Promise.all(deletePromises);
+      
+      // Clear selection
+      setSelectedMilestoneIds(new Set());
+      setShowBulkActions(false);
+    } catch (error) {
+      console.error('Error deleting milestones:', error);
+      alert('Failed to delete milestones. Please try again.');
     }
   };
 
@@ -210,7 +276,7 @@ const TimelineView: React.FC = () => {
   const dateHeaders = getDateHeaders();
 
   return (
-    <div className="pb-20 min-h-screen bg-gray-50">
+    <div className={`min-h-screen bg-gray-50 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
       {/* Header */}
       <div className="bg-white shadow-sm sticky top-0 z-10">
         <div className="px-4 py-4">
@@ -222,7 +288,10 @@ const TimelineView: React.FC = () => {
         <div className="px-4 pb-4 flex items-center justify-between gap-3">
           <div className="flex bg-gray-100 rounded-xl p-1">
             <button
-              onClick={() => setViewMode('list')}
+              onClick={() => {
+                setViewMode('list');
+                setSelectedMilestoneIds(new Set());
+              }}
               className={`px-4 py-2 rounded-lg transition-all ${
                 viewMode === 'list'
                   ? 'bg-white text-accent-purple shadow-sm font-medium'
@@ -232,7 +301,10 @@ const TimelineView: React.FC = () => {
               <List size={18} />
             </button>
             <button
-              onClick={() => setViewMode('calendar')}
+              onClick={() => {
+                setViewMode('calendar');
+                setSelectedMilestoneIds(new Set());
+              }}
               className={`px-4 py-2 rounded-lg transition-all ${
                 viewMode === 'calendar'
                   ? 'bg-white text-accent-purple shadow-sm font-medium'
@@ -315,19 +387,105 @@ const TimelineView: React.FC = () => {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedMilestoneIds.size > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-accent-purple text-white shadow-lg z-40 px-4 py-3">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="font-medium">
+                {selectedMilestoneIds.size} milestone{selectedMilestoneIds.size !== 1 ? 's' : ''} selected
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {phases.length > 0 ? (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleBulkPhaseChange(e.target.value);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg bg-white text-gray-900 border-0 focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="">Change Phase...</option>
+                  {phases.map(phase => (
+                    <option key={phase.id} value={phase.id}>{phase.name}</option>
+                  ))}
+                </select>
+              ) : (
+                <span className="px-4 py-2 text-sm text-white text-opacity-80">
+                  No phases available
+                </span>
+              )}
+              <button
+                onClick={handleBulkDelete}
+                className="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors"
+              >
+                Delete Selected
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedMilestoneIds(new Set());
+                  setShowBulkActions(false);
+                }}
+                className="px-4 py-2 rounded-lg bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* View Content */}
       {viewMode === 'list' ? (
         /* Milestones List */
         <div className="px-4 mt-4 space-y-3">
+          {/* Select All Header */}
+          {sortedMilestones.length > 0 && (
+            <div className="bg-white rounded-3xl shadow-sm p-4 mb-3">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                {selectedMilestoneIds.size === sortedMilestones.length ? (
+                  <CheckSquare size={20} className="text-accent-purple" />
+                ) : (
+                  <Square size={20} />
+                )}
+                <span className="font-medium text-sm">
+                  {selectedMilestoneIds.size === sortedMilestones.length
+                    ? 'Deselect All'
+                    : 'Select All'}
+                </span>
+              </button>
+            </div>
+          )}
+          
           {sortedMilestones.map((milestone) => {
             const phase = phases.find(p => p.id === milestone.phaseId);
             return (
               <div
                 key={milestone.id}
-                className="bg-white rounded-3xl shadow-sm p-4 border-l-4"
+                className={`bg-white rounded-3xl shadow-sm p-4 border-l-4 transition-all ${
+                  selectedMilestoneIds.has(milestone.id) ? 'ring-2 ring-accent-purple ring-offset-2' : ''
+                }`}
                 style={{ borderLeftColor: getPhaseColor(milestone.phaseId) }}
               >
-                <div className="flex items-start justify-between">
+                <div className="flex items-start justify-between gap-3">
+                  {/* Checkbox */}
+                  <button
+                    onClick={() => toggleMilestoneSelection(milestone.id)}
+                    className="mt-1 flex-shrink-0"
+                  >
+                    {selectedMilestoneIds.has(milestone.id) ? (
+                      <CheckSquare size={20} className="text-accent-purple" />
+                    ) : (
+                      <Square size={20} className="text-gray-400" />
+                    )}
+                  </button>
+                  
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span

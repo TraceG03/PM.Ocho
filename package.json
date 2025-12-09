@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite"
+    "start": "vite",
+    "diagnose": "node scripts/diagnose-ai.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
