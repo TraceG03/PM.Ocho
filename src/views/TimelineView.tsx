@@ -595,48 +595,52 @@ const TimelineView: React.FC = () => {
                     {/* Date Headers */}
                     <div className="sticky top-0 bg-white border-b-2 border-gray-300 z-20">
                       <div className="flex">
-                        {dateHeaders.map((date, index) => {
-                          const isToday = date.toDateString() === new Date().toDateString();
-                          return (
-                            <div
-                              key={index}
-                              className={`border-r border-gray-200 p-2 text-center flex-shrink-0 ${isToday ? 'bg-blue-50' : ''}`}
-                              style={{ width: `${dayWidth}px` }}
-                            >
-                              {zoomLevel === 1 ? (
-                                <>
-                                  <div className={`text-base font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                                    {date.getDate()}
-                                  </div>
-                                  <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
-                                    {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {date.toLocaleDateString('en-US', { month: 'short' })}
-                                  </div>
-                                </>
-                              ) : zoomLevel === 2 ? (
-                                <>
-                                  <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                                    {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                  </div>
-                                  <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
-                                    {date.getFullYear()}
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                                    {date.toLocaleDateString('en-US', { month: 'short' })}
-                                  </div>
-                                  <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
-                                    {date.getFullYear()}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
+                        {/* Label column to match milestone rows */}
+                        <div className="w-32 border-r border-gray-200 bg-white flex-shrink-0"></div>
+                        <div className="flex flex-1">
+                          {dateHeaders.map((date, index) => {
+                            const isToday = date.toDateString() === new Date().toDateString();
+                            return (
+                              <div
+                                key={index}
+                                className={`border-r border-gray-200 p-2 text-center flex-shrink-0 ${isToday ? 'bg-blue-50' : ''}`}
+                                style={{ width: `${dayWidth}px` }}
+                              >
+                                {zoomLevel === 1 ? (
+                                  <>
+                                    <div className={`text-base font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                      {date.getDate()}
+                                    </div>
+                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                      {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                      {date.toLocaleDateString('en-US', { month: 'short' })}
+                                    </div>
+                                  </>
+                                ) : zoomLevel === 2 ? (
+                                  <>
+                                    <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                      {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    </div>
+                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                      {date.getFullYear()}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                      {date.toLocaleDateString('en-US', { month: 'short' })}
+                                    </div>
+                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                      {date.getFullYear()}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 
