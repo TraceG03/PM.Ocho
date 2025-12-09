@@ -139,28 +139,25 @@ const TimelineView: React.FC = () => {
     return headers;
   };
 
-  // Calculate total timeline width in days
-  const getTotalDays = () => {
-    return Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-  };
-
-  // Calculate position percentage for a given date
+  // Calculate position percentage for a given date (using exact time calculations)
   const getDatePosition = (date: Date): number => {
-    const totalDays = getTotalDays();
-    const daysFromStart = Math.ceil((date.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    return (daysFromStart / totalDays) * 100;
+    const totalTime = timelineEnd.getTime() - timelineStart.getTime();
+    const dateTime = date.getTime() - timelineStart.getTime();
+    // Ensure position is between 0 and 100
+    return Math.max(0, Math.min(100, (dateTime / totalTime) * 100));
   };
 
-  // Calculate position and width of milestone bar
+  // Calculate position and width of milestone bar (using same calculation as date headers)
   const getMilestonePosition = (milestone: typeof milestones[0]) => {
     const start = new Date(milestone.startDate);
     const end = new Date(milestone.endDate);
-    const totalDays = getTotalDays();
-    const milestoneStart = Math.ceil((start.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const milestoneDuration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     
-    const left = (milestoneStart / totalDays) * 100;
-    const width = (milestoneDuration / totalDays) * 100;
+    // Use the same getDatePosition function for consistency
+    const left = getDatePosition(start);
+    const right = getDatePosition(end);
+    
+    // Calculate width from positions
+    const width = Math.max(1, right - left); // Minimum 1% width
     
     return { left: `${left}%`, width: `${width}%` };
   };
@@ -491,7 +488,7 @@ const TimelineView: React.FC = () => {
                         </div>
 
                         {/* Milestone Bar */}
-                        <div className="ml-32 relative h-full">
+                        <div className="ml-32 relative h-full" style={{ width: 'calc(100% - 8rem)' }}>
                           <div
                             onClick={() => setSelectedMilestone(milestone.id)}
                             className="absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-pointer hover:opacity-90 hover:shadow-md transition-all"
@@ -499,7 +496,7 @@ const TimelineView: React.FC = () => {
                               backgroundColor: getPhaseColor(milestone.phaseId),
                               left: position.left,
                               width: position.width,
-                              minWidth: '60px'
+                              minWidth: '40px'
                             }}
                             title={`Click to view details: ${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()})`}
                           >
