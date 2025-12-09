@@ -89,8 +89,10 @@ const TimelineView: React.FC = () => {
     if (milestones.length === 0) {
       const start = new Date();
       start.setDate(1);
+      start.setHours(0, 0, 0, 0);
       const end = new Date();
       end.setFullYear(end.getFullYear() + 2); // Default to 2 years ahead
+      end.setHours(23, 59, 59, 999);
       return { start, end };
     }
 
@@ -100,6 +102,10 @@ const TimelineView: React.FC = () => {
     ]);
     const start = new Date(Math.min(...dates.map(d => d.getTime())));
     let end = new Date(Math.max(...dates.map(d => d.getTime())));
+    
+    // Normalize to start/end of day
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
     
     // Add padding (at least 30 days, or extend to 2 years from latest milestone)
     start.setDate(start.getDate() - 30);
@@ -118,6 +124,7 @@ const TimelineView: React.FC = () => {
       oneYearFromToday.getTime(),
       end.getTime() + (30 * 24 * 60 * 60 * 1000) // At least 30 days padding
     ));
+    end.setHours(23, 59, 59, 999);
     
     return { start, end };
   };
@@ -127,23 +134,27 @@ const TimelineView: React.FC = () => {
   // Generate date headers based on zoom level
   const getDateHeaders = () => {
     const headers: Date[] = [];
+    // Normalize to start of day for consistent alignment
     const current = new Date(timelineStart);
+    current.setHours(0, 0, 0, 0);
+    const end = new Date(timelineEnd);
+    end.setHours(23, 59, 59, 999);
     
     if (zoomLevel === 1) {
       // Daily view
-      while (current <= timelineEnd) {
+      while (current <= end) {
         headers.push(new Date(current));
         current.setDate(current.getDate() + 1);
       }
     } else if (zoomLevel === 2) {
       // Weekly view
-      while (current <= timelineEnd) {
+      while (current <= end) {
         headers.push(new Date(current));
         current.setDate(current.getDate() + 7);
       }
     } else {
       // Monthly view
-      while (current <= timelineEnd) {
+      while (current <= end) {
         headers.push(new Date(current));
         current.setMonth(current.getMonth() + 1);
       }
@@ -158,17 +169,25 @@ const TimelineView: React.FC = () => {
     const end = new Date(milestone.endDate);
     const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
     
-    // Calculate exact time difference in milliseconds, then convert to days
-    const startTime = start.getTime();
-    const endTime = end.getTime();
-    const timelineStartTime = timelineStart.getTime();
+    // Normalize dates to start of day for consistent calculation
+    const startDate = new Date(start);
+    startDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(end);
+    endDate.setHours(0, 0, 0, 0);
+    const timelineStartDate = new Date(timelineStart);
+    timelineStartDate.setHours(0, 0, 0, 0);
     
-    // Calculate exact days (using milliseconds for precision)
-    const startDays = (startTime - timelineStartTime) / (1000 * 60 * 60 * 24);
-    const endDays = (endTime - timelineStartTime) / (1000 * 60 * 60 * 24);
-    const duration = Math.max(1, endDays - startDays);
+    // Calculate days difference (using normalized dates)
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime();
+    const timelineStartTime = timelineStartDate.getTime();
     
-    // Calculate position in pixels (using exact calculation, not rounded)
+    // Calculate days from timeline start
+    const startDays = Math.round((startTime - timelineStartTime) / (1000 * 60 * 60 * 24));
+    const endDays = Math.round((endTime - timelineStartTime) / (1000 * 60 * 60 * 24));
+    const duration = Math.max(1, endDays - startDays + 1); // +1 to include both start and end day
+    
+    // Calculate position in pixels
     const left = startDays * dayWidth;
     const width = duration * dayWidth;
     
