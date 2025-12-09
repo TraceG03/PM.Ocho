@@ -139,11 +139,23 @@ const TimelineView: React.FC = () => {
     return headers;
   };
 
+  // Calculate total timeline width in days
+  const getTotalDays = () => {
+    return Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+  };
+
+  // Calculate position percentage for a given date
+  const getDatePosition = (date: Date): number => {
+    const totalDays = getTotalDays();
+    const daysFromStart = Math.ceil((date.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    return (daysFromStart / totalDays) * 100;
+  };
+
   // Calculate position and width of milestone bar
   const getMilestonePosition = (milestone: typeof milestones[0]) => {
     const start = new Date(milestone.startDate);
     const end = new Date(milestone.endDate);
-    const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
+    const totalDays = getTotalDays();
     const milestoneStart = Math.ceil((start.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
     const milestoneDuration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
     
@@ -158,10 +170,7 @@ const TimelineView: React.FC = () => {
     const today = new Date();
     if (today < timelineStart || today > timelineEnd) return null;
     
-    const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const todayDays = Math.ceil((today.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const position = (todayDays / totalDays) * 100;
-    
+    const position = getDatePosition(today);
     return `${position}%`;
   };
 
@@ -383,17 +392,26 @@ const TimelineView: React.FC = () => {
 
             {/* Timeline Container */}
             <div className="overflow-x-auto" ref={timelineRef}>
-              <div className="min-w-full" style={{ transform: `translateX(-${scrollPosition}px)` }}>
-                {/* Date Headers */}
+              <div className="relative" style={{ transform: `translateX(-${scrollPosition}px)` }}>
+                {/* Date Headers - Positioned to align with milestones */}
                 <div className="sticky top-0 bg-white border-b-2 border-gray-300 z-20">
-                  <div className="flex" style={{ minWidth: `${dateHeaders.length * (zoomLevel === 1 ? 60 : zoomLevel === 2 ? 80 : 100)}px` }}>
+                  <div className="relative" style={{ width: '100%', minHeight: '80px' }}>
                     {dateHeaders.map((date, index) => {
                       const isToday = date.toDateString() === new Date().toDateString();
+                      const position = getDatePosition(date);
+                      const nextDate = dateHeaders[index + 1];
+                      const nextPosition = nextDate ? getDatePosition(nextDate) : 100;
+                      const width = nextPosition - position;
+                      
                       return (
                         <div
                           key={index}
-                          className={`border-r border-gray-200 p-3 text-center ${isToday ? 'bg-blue-50' : ''}`}
-                          style={{ minWidth: zoomLevel === 1 ? '60px' : zoomLevel === 2 ? '80px' : '100px' }}
+                          className={`absolute border-r border-gray-200 p-3 text-center ${isToday ? 'bg-blue-50' : ''}`}
+                          style={{
+                            left: `${position}%`,
+                            width: `${width}%`,
+                            minWidth: zoomLevel === 1 ? '60px' : zoomLevel === 2 ? '80px' : '100px'
+                          }}
                         >
                           {zoomLevel === 1 ? (
                             <>
@@ -436,7 +454,7 @@ const TimelineView: React.FC = () => {
                 </div>
 
                 {/* Timeline Rows */}
-                <div className="relative" style={{ minHeight: `${sortedMilestones.length * 60 + 20}px` }}>
+                <div className="relative" style={{ minHeight: `${sortedMilestones.length * 60 + 20}px`, width: '100%' }}>
                   {/* Today Indicator Line */}
                   {todayPosition && (
                     <div
