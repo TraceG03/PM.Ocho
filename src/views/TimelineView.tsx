@@ -144,6 +144,10 @@ const TimelineView: React.FC = () => {
     }
   };
 
+  const getPhaseColor = (phaseId: string) => {
+    return phases.find(p => p.id === phaseId)?.color || '#3b82f6';
+  };
+
   // Asana-style Timeline view logic
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = days, 2 = weeks, 3 = months
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -387,7 +391,7 @@ const TimelineView: React.FC = () => {
 
       {/* Bulk Actions Bar */}
       {selectedMilestoneIds.size > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-accent-purple text-white shadow-lg z-40 px-4 py-3">
+        <div className="fixed bottom-0 left-0 right-0 bg-accent-purple text-white shadow-lg z-[60] px-4 py-3 pb-20">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="font-medium">
