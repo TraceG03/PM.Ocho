@@ -90,7 +90,7 @@ const TimelineView: React.FC = () => {
       const start = new Date();
       start.setDate(1);
       const end = new Date();
-      end.setMonth(end.getMonth() + 3);
+      end.setFullYear(end.getFullYear() + 2); // Default to 2 years ahead
       return { start, end };
     }
 
@@ -99,11 +99,25 @@ const TimelineView: React.FC = () => {
       new Date(m.endDate)
     ]);
     const start = new Date(Math.min(...dates.map(d => d.getTime())));
-    const end = new Date(Math.max(...dates.map(d => d.getTime())));
+    let end = new Date(Math.max(...dates.map(d => d.getTime())));
     
-    // Add padding
-    start.setDate(start.getDate() - 7);
-    end.setDate(end.getDate() + 7);
+    // Add padding (at least 30 days, or extend to 2 years from latest milestone)
+    start.setDate(start.getDate() - 30);
+    
+    // Ensure timeline extends at least 2 years from the latest milestone
+    const twoYearsFromLatest = new Date(end);
+    twoYearsFromLatest.setFullYear(twoYearsFromLatest.getFullYear() + 2);
+    
+    // Also ensure it goes at least 1 year from today
+    const oneYearFromToday = new Date();
+    oneYearFromToday.setFullYear(oneYearFromToday.getFullYear() + 1);
+    
+    // Use the latest of: milestone end + 2 years, or today + 1 year
+    end = new Date(Math.max(
+      twoYearsFromLatest.getTime(),
+      oneYearFromToday.getTime(),
+      end.getTime() + (30 * 24 * 60 * 60 * 1000) // At least 30 days padding
+    ));
     
     return { start, end };
   };
