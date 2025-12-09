@@ -74,7 +74,13 @@ const TimelineView: React.FC = () => {
     }
   };
 
-  // Multi-select handlers
+
+  // Sort milestones by start date (needed for both list and calendar views)
+  const sortedMilestones = [...milestones].sort((a, b) => 
+    new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+  );
+
+  // Multi-select handlers (moved after sortedMilestones to avoid reference errors)
   const toggleMilestoneSelection = (milestoneId: string) => {
     setSelectedMilestoneIds(prev => {
       const newSet = new Set(prev);
@@ -137,14 +143,6 @@ const TimelineView: React.FC = () => {
       alert('Failed to delete milestones. Please try again.');
     }
   };
-
-  const getPhaseColor = (phaseId: string) => {
-    return phases.find(p => p.id === phaseId)?.color || '#3b82f6';
-  };
-
-  const sortedMilestones = [...milestones].sort((a, b) => 
-    new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
-  );
 
   // Asana-style Timeline view logic
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = days, 2 = weeks, 3 = months
@@ -476,7 +474,10 @@ const TimelineView: React.FC = () => {
                 <div className="flex items-start justify-between gap-3">
                   {/* Checkbox */}
                   <button
-                    onClick={() => toggleMilestoneSelection(milestone.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMilestoneSelection(milestone.id);
+                    }}
                     className="mt-1 flex-shrink-0"
                   >
                     {selectedMilestoneIds.has(milestone.id) ? (
@@ -505,7 +506,8 @@ const TimelineView: React.FC = () => {
                   </div>
                   <div className="flex gap-2 ml-2">
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent checkbox toggle
                         setMilestoneForm({
                           title: milestone.title,
                           startDate: milestone.startDate,
@@ -515,19 +517,30 @@ const TimelineView: React.FC = () => {
                         });
                         setEditingMilestoneId(milestone.id);
                         setShowAddMilestone(true);
+                        // Clear selection when editing
+                        setSelectedMilestoneIds(new Set());
                       }}
                       className="p-2 text-gray-400 hover:text-gray-600"
                     >
                       <Edit size={18} />
                     </button>
                     <button
-                      onClick={async () => {
-                        try {
-                          await deleteMilestone(milestone.id);
-                        } catch (error) {
-                          console.error('Error deleting milestone:', error);
-                          alert('Failed to delete milestone. Please try again.');
-                        }
+                      onClick={(e) => {
+                        e.stopPropagation(); // Prevent checkbox toggle
+                        (async () => {
+                          try {
+                            await deleteMilestone(milestone.id);
+                            // Remove from selection if it was selected
+                            setSelectedMilestoneIds(prev => {
+                              const newSet = new Set(prev);
+                              newSet.delete(milestone.id);
+                              return newSet;
+                            });
+                          } catch (error) {
+                            console.error('Error deleting milestone:', error);
+                            alert('Failed to delete milestone. Please try again.');
+                          }
+                        })();
                       }}
                       className="p-2 text-gray-400 hover:text-red-500"
                     >
@@ -793,6 +806,8 @@ const TimelineView: React.FC = () => {
                       setEditingMilestoneId(milestone.id);
                       setSelectedMilestone(null);
                       setShowAddMilestone(true);
+                      // Clear selection when editing
+                      setSelectedMilestoneIds(new Set());
                     }}
                     className="flex-1 bg-accent-purple text-white py-2 px-4 rounded-xl font-medium hover:opacity-90 transition-opacity"
                   >
