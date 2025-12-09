@@ -17,6 +17,7 @@ const TimelineView: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [showManagePhases, setShowManagePhases] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
+  const [selectedMilestone, setSelectedMilestone] = useState<string | null>(null);
   const [editingPhase, setEditingPhase] = useState<string | null>(null);
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [newPhaseName, setNewPhaseName] = useState('');
@@ -384,28 +385,49 @@ const TimelineView: React.FC = () => {
             <div className="overflow-x-auto" ref={timelineRef}>
               <div className="min-w-full" style={{ transform: `translateX(-${scrollPosition}px)` }}>
                 {/* Date Headers */}
-                <div className="sticky top-0 bg-white border-b border-gray-200 z-20">
-                  <div className="flex" style={{ minWidth: `${dateHeaders.length * (zoomLevel === 1 ? 40 : zoomLevel === 2 ? 60 : 80)}px` }}>
+                <div className="sticky top-0 bg-white border-b-2 border-gray-300 z-20">
+                  <div className="flex" style={{ minWidth: `${dateHeaders.length * (zoomLevel === 1 ? 60 : zoomLevel === 2 ? 80 : 100)}px` }}>
                     {dateHeaders.map((date, index) => {
                       const isToday = date.toDateString() === new Date().toDateString();
                       return (
                         <div
                           key={index}
-                          className="border-r border-gray-200 p-2 text-center"
-                          style={{ minWidth: zoomLevel === 1 ? '40px' : zoomLevel === 2 ? '60px' : '80px' }}
+                          className={`border-r border-gray-200 p-3 text-center ${isToday ? 'bg-blue-50' : ''}`}
+                          style={{ minWidth: zoomLevel === 1 ? '60px' : zoomLevel === 2 ? '80px' : '100px' }}
                         >
-                          <div className={`text-xs font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
-                            {zoomLevel === 1 
-                              ? date.getDate()
-                              : zoomLevel === 2
-                              ? `Week ${Math.ceil(date.getDate() / 7)}`
-                              : date.toLocaleDateString('en-US', { month: 'short' })
-                            }
-                          </div>
-                          {zoomLevel === 1 && (
-                            <div className="text-xs text-gray-400 mt-1">
-                              {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                            </div>
+                          {zoomLevel === 1 ? (
+                            <>
+                              <div className={`text-lg font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                {date.getDate()}
+                              </div>
+                              <div className={`text-xs font-medium ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-1`}>
+                                {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {date.toLocaleDateString('en-US', { month: 'short' })}
+                              </div>
+                            </>
+                          ) : zoomLevel === 2 ? (
+                            <>
+                              <div className={`text-base font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                Week {Math.ceil((date.getDate() + new Date(date.getFullYear(), date.getMonth(), 0).getDate()) / 7)}
+                              </div>
+                              <div className={`text-sm font-medium ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-1`}>
+                                {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </div>
+                              <div className="text-xs text-gray-500 mt-0.5">
+                                {date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className={`text-base font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                {date.toLocaleDateString('en-US', { month: 'short' })}
+                              </div>
+                              <div className={`text-sm font-medium ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-1`}>
+                                {date.getFullYear()}
+                              </div>
+                            </>
                           )}
                         </div>
                       );
@@ -453,14 +475,15 @@ const TimelineView: React.FC = () => {
                         {/* Milestone Bar */}
                         <div className="ml-32 relative h-full">
                           <div
-                            className="absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-pointer hover:opacity-90 transition-opacity"
+                            onClick={() => setSelectedMilestone(milestone.id)}
+                            className="absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-pointer hover:opacity-90 hover:shadow-md transition-all"
                             style={{
                               backgroundColor: getPhaseColor(milestone.phaseId),
                               left: position.left,
                               width: position.width,
                               minWidth: '60px'
                             }}
-                            title={`${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()})`}
+                            title={`Click to view details: ${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()})`}
                           >
                             <span className="truncate">{milestone.title}</span>
                           </div>
@@ -499,6 +522,114 @@ const TimelineView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Milestone Details Modal */}
+      {selectedMilestone && (() => {
+        const milestone = milestones.find(m => m.id === selectedMilestone);
+        const phase = milestone ? phases.find(p => p.id === milestone.phaseId) : null;
+        if (!milestone) return null;
+        
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <h2 className="text-xl font-bold text-gray-900">Milestone Details</h2>
+                <button
+                  onClick={() => setSelectedMilestone(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Title</label>
+                  <h3 className="text-lg font-bold text-gray-900 mt-1">{milestone.title}</h3>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded"
+                    style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
+                  />
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Phase</label>
+                    <p className="text-sm font-medium text-gray-900">{phase?.name || 'Unknown Phase'}</p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Start Date</label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {new Date(milestone.startDate).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">End Date</label>
+                    <p className="text-sm font-medium text-gray-900 mt-1">
+                      {new Date(milestone.endDate).toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                </div>
+                
+                {milestone.notes && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Notes</label>
+                    <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{milestone.notes}</p>
+                  </div>
+                )}
+                
+                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={() => {
+                      setMilestoneForm({
+                        title: milestone.title,
+                        startDate: milestone.startDate,
+                        endDate: milestone.endDate,
+                        phaseId: milestone.phaseId,
+                        notes: milestone.notes,
+                      });
+                      setEditingMilestoneId(milestone.id);
+                      setSelectedMilestone(null);
+                      setShowAddMilestone(true);
+                    }}
+                    className="flex-1 bg-accent-purple text-white py-2 px-4 rounded-xl font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (confirm('Are you sure you want to delete this milestone?')) {
+                        try {
+                          await deleteMilestone(milestone.id);
+                          setSelectedMilestone(null);
+                        } catch (error) {
+                          console.error('Error deleting milestone:', error);
+                          alert('Failed to delete milestone. Please try again.');
+                        }
+                      }
+                    }}
+                    className="flex-1 bg-red-500 text-white py-2 px-4 rounded-xl font-medium hover:opacity-90 transition-opacity"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Manage Phases Modal */}
       {showManagePhases && (
