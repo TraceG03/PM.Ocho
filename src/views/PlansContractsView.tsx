@@ -122,8 +122,50 @@ const PlansContractsView: React.FC = () => {
       const link = document.createElement('a');
       link.href = selectedFile.dataUrl;
       link.download = selectedFile.name;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     }
+  };
+
+  const downloadFileById = (fileId: string) => {
+    const file = getFile(fileId);
+    if (file) {
+      const link = document.createElement('a');
+      link.href = file.dataUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
+
+  const getFilePreview = (file: typeof selectedFile) => {
+    if (!file) return null;
+    
+    if (file.type.includes('image')) {
+      return (
+        <img
+          src={file.dataUrl}
+          alt={file.name}
+          className="w-full h-full object-cover rounded-lg"
+        />
+      );
+    }
+    
+    if (file.type.includes('pdf')) {
+      return (
+        <div className="w-full h-full bg-red-50 rounded-lg flex items-center justify-center">
+          <FileText size={32} className="text-red-500" />
+        </div>
+      );
+    }
+    
+    return (
+      <div className="w-full h-full bg-gray-100 rounded-lg flex items-center justify-center">
+        <File size={32} className="text-gray-400" />
+      </div>
+    );
   };
 
   return (
@@ -217,10 +259,21 @@ const PlansContractsView: React.FC = () => {
               return (
                 <div
                   key={document.id}
-                  className="bg-white rounded-3xl shadow-sm p-4 border border-gray-100"
+                  className="bg-white rounded-3xl shadow-sm p-4 border border-gray-100 hover:shadow-md transition-shadow"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
+                  <div className="flex items-start gap-4">
+                    {/* File Preview Thumbnail */}
+                    {file && (
+                      <div 
+                        className="w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-50 border border-gray-200 cursor-pointer"
+                        onClick={() => setViewingDocument(document.id)}
+                        title="Click to view"
+                      >
+                        {getFilePreview(file)}
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -237,35 +290,48 @@ const PlansContractsView: React.FC = () => {
                       </div>
                       <h3 className="font-semibold text-gray-900 mb-1">{document.title}</h3>
                       {document.description && (
-                        <p className="text-sm text-gray-600 mb-2">{document.description}</p>
+                        <p className="text-sm text-gray-600 mb-2 line-clamp-2">{document.description}</p>
                       )}
                       {file && (
                         <div className="flex items-center gap-2 mt-2 p-2 bg-gray-50 rounded-lg">
                           {getFileIcon(file.type)}
-                          <div className="flex-1">
-                            <p className="text-xs font-medium text-gray-900">{file.name}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-900 truncate">{file.name}</p>
                             <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                           </div>
                         </div>
                       )}
                     </div>
-                    <div className="flex gap-2 ml-2">
+                    
+                    {/* Action Buttons */}
+                    <div className="flex flex-col gap-2 ml-2">
                       <button
                         onClick={() => setViewingDocument(document.id)}
-                        className="p-2 text-gray-400 hover:text-blue-500"
+                        className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="View file"
                       >
                         <Eye size={18} />
                       </button>
                       <button
+                        onClick={() => downloadFileById(document.fileId)}
+                        className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Download file"
+                      >
+                        <Download size={18} />
+                      </button>
+                      <button
                         onClick={async () => {
-                          try {
-                            await deleteDocument(document.id);
-                          } catch (error) {
-                            console.error('Error deleting document:', error);
-                            alert('Failed to delete document. Please try again.');
+                          if (confirm(`Are you sure you want to delete "${document.title}"?`)) {
+                            try {
+                              await deleteDocument(document.id);
+                            } catch (error) {
+                              console.error('Error deleting document:', error);
+                              alert('Failed to delete document. Please try again.');
+                            }
                           }
                         }}
-                        className="p-2 text-gray-400 hover:text-red-500"
+                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete document"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -299,27 +365,51 @@ const PlansContractsView: React.FC = () => {
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-auto p-4">
+            <div className="flex-1 overflow-auto p-4 bg-gray-50">
               {selectedFile.type.includes('image') ? (
-                <img
-                  src={selectedFile.dataUrl}
-                  alt={selectedFile.name}
-                  className="max-w-full h-auto rounded-lg"
-                />
+                <div className="flex items-center justify-center min-h-full">
+                  <img
+                    src={selectedFile.dataUrl}
+                    alt={selectedFile.name}
+                    className="max-w-full max-h-[70vh] h-auto rounded-lg shadow-lg object-contain"
+                  />
+                </div>
               ) : selectedFile.type.includes('pdf') ? (
                 <iframe
                   src={selectedFile.dataUrl}
-                  className="w-full h-full min-h-[600px] rounded-lg"
+                  className="w-full h-full min-h-[600px] rounded-lg border border-gray-200"
                   title={selectedFile.name}
                 />
+              ) : selectedFile.type.includes('text') || selectedFile.name.endsWith('.txt') ? (
+                <div className="bg-white rounded-lg p-6 shadow-sm">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono">
+                    {(() => {
+                      try {
+                        const base64Match = selectedFile.dataUrl.match(/^data:text\/plain;base64,(.+)$/);
+                        if (base64Match) {
+                          return atob(base64Match[1]);
+                        }
+                        return 'Unable to display text content';
+                      } catch (e) {
+                        return 'Unable to display text content';
+                      }
+                    })()}
+                  </pre>
+                </div>
               ) : (
-                <div className="text-center py-8">
-                  {getFileIcon(selectedFile.type)}
-                  <p className="mt-4 text-gray-600">{selectedFile.name}</p>
+                <div className="text-center py-12">
+                  <div className="mb-4">
+                    {getFileIcon(selectedFile.type)}
+                  </div>
+                  <p className="text-lg font-medium text-gray-900 mb-2">{selectedFile.name}</p>
+                  <p className="text-sm text-gray-500 mb-6">
+                    {formatFileSize(selectedFile.size)} • {selectedFile.type || 'Unknown type'}
+                  </p>
                   <button
                     onClick={downloadFile}
-                    className="mt-4 px-4 py-2 bg-accent-purple text-white rounded-xl hover:shadow-md transition-shadow"
+                    className="px-6 py-3 bg-accent-purple text-white rounded-xl hover:shadow-md transition-shadow font-medium flex items-center gap-2 mx-auto"
                   >
+                    <Download size={20} />
                     Download File
                   </button>
                 </div>
