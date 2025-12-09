@@ -75,9 +75,16 @@ const TimelineView: React.FC = () => {
   };
 
 
+  // Helper function to parse YYYY-MM-DD date strings as local dates (not UTC)
+  // This prevents timezone shifts that cause milestones to appear on wrong dates
+  const parseLocalDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   // Sort milestones by start date (needed for both list and calendar views)
   const sortedMilestones = [...milestones].sort((a, b) => 
-    new Date(a.startDate).getTime() - new Date(b.startDate).getTime()
+    parseLocalDate(a.startDate).getTime() - parseLocalDate(b.startDate).getTime()
   );
 
   // Multi-select handlers (moved after sortedMilestones to avoid reference errors)
@@ -165,8 +172,8 @@ const TimelineView: React.FC = () => {
     }
 
     const dates = milestones.flatMap(m => [
-      new Date(m.startDate),
-      new Date(m.endDate)
+      parseLocalDate(m.startDate),
+      parseLocalDate(m.endDate)
     ]);
     const start = new Date(Math.min(...dates.map(d => d.getTime())));
     let end = new Date(Math.max(...dates.map(d => d.getTime())));
@@ -233,8 +240,8 @@ const TimelineView: React.FC = () => {
 
   // Calculate position in pixels for milestones (matching date header grid)
   const getMilestonePosition = (milestone: typeof milestones[0]) => {
-    const start = new Date(milestone.startDate);
-    const end = new Date(milestone.endDate);
+    const start = parseLocalDate(milestone.startDate);
+    const end = parseLocalDate(milestone.endDate);
     const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
     
     // Normalize dates to start of day for consistent calculation
