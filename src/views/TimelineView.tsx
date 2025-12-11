@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, CheckSquare, Square } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
 import { useApp, presetColors } from '../context/AppContext';
 
 const TimelineView: React.FC = () => {
@@ -22,6 +22,28 @@ const TimelineView: React.FC = () => {
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(phases.map(p => p.id))); // All phases expanded by default
+
+  // Update expanded phases when phases change
+  useEffect(() => {
+    setExpandedPhases(prev => {
+      const newSet = new Set(prev);
+      // Add any new phases
+      phases.forEach(phase => {
+        if (!newSet.has(phase.id)) {
+          newSet.add(phase.id);
+        }
+      });
+      // Remove phases that no longer exist
+      const phaseIds = new Set(phases.map(p => p.id));
+      Array.from(newSet).forEach(id => {
+        if (!phaseIds.has(id)) {
+          newSet.delete(id);
+        }
+      });
+      return newSet;
+    });
+  }, [phases]);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [newPhaseColor, setNewPhaseColor] = useState(presetColors[0]);
   const [milestoneForm, setMilestoneForm] = useState({
@@ -210,28 +232,33 @@ const TimelineView: React.FC = () => {
   const getDateHeaders = () => {
     const headers: Date[] = [];
     // Normalize to start of day for consistent alignment
-    const current = new Date(timelineStart);
+    let current = new Date(timelineStart);
     current.setHours(0, 0, 0, 0);
     const end = new Date(timelineEnd);
     end.setHours(23, 59, 59, 999);
     
     if (zoomLevel === 1) {
-      // Daily view
+      // Daily view - start from exact timeline start
       while (current <= end) {
         headers.push(new Date(current));
         current.setDate(current.getDate() + 1);
       }
     } else if (zoomLevel === 2) {
-      // Weekly view
+      // Weekly view - start from the Monday of the week containing timeline start
+      const dayOfWeek = current.getDay();
+      const diff = current.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+      current.setDate(diff);
       while (current <= end) {
         headers.push(new Date(current));
         current.setDate(current.getDate() + 7);
       }
     } else {
-      // Monthly view
+      // Monthly view - start from the first day of the month containing timeline start
+      current.setDate(1); // First day of the month
       while (current <= end) {
         headers.push(new Date(current));
         current.setMonth(current.getMonth() + 1);
+        current.setDate(1); // Ensure we stay on the 1st of each month
       }
     }
     
@@ -242,25 +269,50 @@ const TimelineView: React.FC = () => {
   const getMilestonePosition = (milestone: typeof milestones[0]) => {
     const start = parseLocalDate(milestone.startDate);
     const end = parseLocalDate(milestone.endDate);
-    const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+    
+    // Get the first date header to use as reference point
+    const dateHeaders = getDateHeaders();
+    if (dateHeaders.length === 0) {
+      return { left: '0px', width: '60px' };
+    }
+    const firstHeader = new Date(dateHeaders[0]);
+    firstHeader.setHours(0, 0, 0, 0);
     
     // Normalize dates to start of day for consistent calculation
     const startDate = new Date(start);
     startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(end);
     endDate.setHours(0, 0, 0, 0);
-    const timelineStartDate = new Date(timelineStart);
-    timelineStartDate.setHours(0, 0, 0, 0);
     
-    // Calculate days difference (using normalized dates)
-    const startTime = startDate.getTime();
-    const endTime = endDate.getTime();
-    const timelineStartTime = timelineStartDate.getTime();
+    let dayWidth: number;
+    let startDays: number;
+    let endDays: number;
     
-    // Calculate days from timeline start
-    const startDays = Math.round((startTime - timelineStartTime) / (1000 * 60 * 60 * 24));
-    const endDays = Math.round((endTime - timelineStartTime) / (1000 * 60 * 60 * 24));
-    const duration = Math.max(1, endDays - startDays + 1); // +1 to include both start and end day
+    if (zoomLevel === 1) {
+      // Daily view - calculate in days
+      dayWidth = 80;
+      startDays = Math.round((startDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
+      endDays = Math.round((endDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
+    } else if (zoomLevel === 2) {
+      // Weekly view - calculate in weeks
+      dayWidth = 120;
+      startDays = Math.round((startDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
+      endDays = Math.round((endDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
+    } else {
+      // Monthly view - calculate in months
+      dayWidth = 150;
+      const startYear = startDate.getFullYear();
+      const startMonth = startDate.getMonth();
+      const endYear = endDate.getFullYear();
+      const endMonth = endDate.getMonth();
+      const firstYear = firstHeader.getFullYear();
+      const firstMonth = firstHeader.getMonth();
+      
+      startDays = (startYear - firstYear) * 12 + (startMonth - firstMonth);
+      endDays = (endYear - firstYear) * 12 + (endMonth - firstMonth);
+    }
+    
+    const duration = Math.max(1, endDays - startDays + 1);
     
     // Calculate position in pixels
     const left = startDays * dayWidth;
@@ -272,17 +324,42 @@ const TimelineView: React.FC = () => {
   // Get today's position in pixels
   const getTodayPosition = () => {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     if (today < timelineStart || today > timelineEnd) return null;
     
-    const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
-    const todayDays = Math.ceil((today.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-    const position = todayDays * dayWidth;
+    // Get the first date header to use as reference point
+    const dateHeaders = getDateHeaders();
+    if (dateHeaders.length === 0) return null;
+    const firstHeader = new Date(dateHeaders[0]);
+    firstHeader.setHours(0, 0, 0, 0);
     
+    let dayWidth: number;
+    let todayDays: number;
+    
+    if (zoomLevel === 1) {
+      // Daily view
+      dayWidth = 80;
+      todayDays = Math.round((today.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
+    } else if (zoomLevel === 2) {
+      // Weekly view
+      dayWidth = 120;
+      todayDays = Math.round((today.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
+    } else {
+      // Monthly view
+      dayWidth = 150;
+      const todayYear = today.getFullYear();
+      const todayMonth = today.getMonth();
+      const firstYear = firstHeader.getFullYear();
+      const firstMonth = firstHeader.getMonth();
+      todayDays = (todayYear - firstYear) * 12 + (todayMonth - firstMonth);
+    }
+    
+    const position = todayDays * dayWidth;
     return `${position}px`;
   };
 
-  const todayPosition = getTodayPosition();
   const dateHeaders = getDateHeaders();
+  const todayPosition = getTodayPosition();
 
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
@@ -449,119 +526,259 @@ const TimelineView: React.FC = () => {
 
       {/* View Content */}
       {viewMode === 'list' ? (
-        /* Milestones List */
+        /* Milestones List - Grouped by Phase */
         <div className="px-4 mt-4 space-y-3">
           {/* Select All Header */}
           {sortedMilestones.length > 0 && (
-            <div className="bg-white rounded-3xl shadow-sm p-4 mb-3">
-              <button
-                onClick={toggleSelectAll}
-                className="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                {selectedMilestoneIds.size === sortedMilestones.length ? (
-                  <CheckSquare size={20} className="text-accent-purple" />
-                ) : (
-                  <Square size={20} />
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-4 mb-3">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={toggleSelectAll}
+                  className="flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  {selectedMilestoneIds.size === sortedMilestones.length ? (
+                    <CheckSquare size={20} className="text-accent-purple" />
+                  ) : (
+                    <Square size={20} />
+                  )}
+                  <span className="font-medium text-sm">
+                    {selectedMilestoneIds.size === sortedMilestones.length
+                      ? 'Deselect All'
+                      : 'Select All'}
+                  </span>
+                </button>
+                {phases.length > 0 && (
+                  <button
+                    onClick={toggleExpandAll}
+                    className="text-sm text-accent-purple hover:underline"
+                  >
+                    {expandedPhases.size === phases.length ? 'Collapse All' : 'Expand All'}
+                  </button>
                 )}
-                <span className="font-medium text-sm">
-                  {selectedMilestoneIds.size === sortedMilestones.length
-                    ? 'Deselect All'
-                    : 'Select All'}
-                </span>
-              </button>
+              </div>
             </div>
           )}
           
-          {sortedMilestones.map((milestone) => {
-            const phase = phases.find(p => p.id === milestone.phaseId);
+          {/* Milestones grouped by phase */}
+          {phases.map((phase) => {
+            const phaseMilestones = milestonesByPhase[phase.id] || [];
+            if (phaseMilestones.length === 0) return null;
+            
+            const isExpanded = expandedPhases.has(phase.id);
+            const phaseSelectedCount = phaseMilestones.filter(m => selectedMilestoneIds.has(m.id)).length;
+            
             return (
-              <div
-                key={milestone.id}
-                className={`bg-white rounded-3xl shadow-sm p-4 border-l-4 transition-all ${
-                  selectedMilestoneIds.has(milestone.id) ? 'ring-2 ring-accent-purple ring-offset-2' : ''
-                }`}
-                style={{ borderLeftColor: getPhaseColor(milestone.phaseId) }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  {/* Checkbox */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleMilestoneSelection(milestone.id);
-                    }}
-                    className="mt-1 flex-shrink-0"
-                  >
-                    {selectedMilestoneIds.has(milestone.id) ? (
-                      <CheckSquare size={20} className="text-accent-purple" />
+              <div key={phase.id} className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm overflow-hidden">
+                {/* Phase Header */}
+                <button
+                  onClick={() => togglePhaseExpansion(phase.id)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronUp size={20} className="text-gray-400 dark:text-gray-500" />
                     ) : (
-                      <Square size={20} className="text-gray-400" />
+                      <ChevronDown size={20} className="text-gray-400 dark:text-gray-500" />
                     )}
-                  </button>
-                  
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span
-                        className="px-3 py-1 rounded-full text-xs font-medium text-white"
-                        style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
-                      >
-                        {phase?.name || 'Unknown Phase'}
-                      </span>
+                    <div
+                      className="w-4 h-4 rounded"
+                      style={{ backgroundColor: phase.color }}
+                    />
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        {phase.name}
+                      </h3>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {phaseMilestones.length} milestone{phaseMilestones.length !== 1 ? 's' : ''}
+                        {phaseSelectedCount > 0 && ` • ${phaseSelectedCount} selected`}
+                      </p>
                     </div>
-                    <h3 className="font-semibold text-gray-900 mb-1">{milestone.title}</h3>
-                    <p className="text-sm text-gray-600">
-                      {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
-                    </p>
-                    {milestone.notes && (
-                      <p className="text-sm text-gray-600 mt-2">{milestone.notes}</p>
-                    )}
                   </div>
-                  <div className="flex gap-2 ml-2">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent checkbox toggle
-                        setMilestoneForm({
-                          title: milestone.title,
-                          startDate: milestone.startDate,
-                          endDate: milestone.endDate,
-                          phaseId: milestone.phaseId,
-                          notes: milestone.notes,
-                        });
-                        setEditingMilestoneId(milestone.id);
-                        setShowAddMilestone(true);
-                        // Clear selection when editing
-                        setSelectedMilestoneIds(new Set());
-                      }}
-                      className="p-2 text-gray-400 hover:text-gray-600"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation(); // Prevent checkbox toggle
-                        (async () => {
-                          try {
-                            await deleteMilestone(milestone.id);
-                            // Remove from selection if it was selected
-                            setSelectedMilestoneIds(prev => {
-                              const newSet = new Set(prev);
-                              newSet.delete(milestone.id);
-                              return newSet;
-                            });
-                          } catch (error) {
-                            console.error('Error deleting milestone:', error);
-                            alert('Failed to delete milestone. Please try again.');
-                          }
-                        })();
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                </button>
+                
+                {/* Phase Milestones */}
+                {isExpanded && (
+                  <div className="border-t border-gray-200 dark:border-gray-700">
+                    {phaseMilestones.map((milestone) => (
+                      <div
+                        key={milestone.id}
+                        className={`border-l-4 p-4 transition-all ${
+                          selectedMilestoneIds.has(milestone.id) ? 'ring-2 ring-accent-purple ring-offset-2 bg-accent-purple/5 dark:bg-accent-purple/10' : ''
+                        }`}
+                        style={{ borderLeftColor: phase.color }}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          {/* Checkbox */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleMilestoneSelection(milestone.id);
+                            }}
+                            className="mt-1 flex-shrink-0"
+                          >
+                            {selectedMilestoneIds.has(milestone.id) ? (
+                              <CheckSquare size={20} className="text-accent-purple" />
+                            ) : (
+                              <Square size={20} className="text-gray-400 dark:text-gray-500" />
+                            )}
+                          </button>
+                          
+                          <div className="flex-1">
+                            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{milestone.title}</h3>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
+                            </p>
+                            {milestone.notes && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{milestone.notes}</p>
+                            )}
+                          </div>
+                          <div className="flex gap-2 ml-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMilestoneForm({
+                                  title: milestone.title,
+                                  startDate: milestone.startDate,
+                                  endDate: milestone.endDate,
+                                  phaseId: milestone.phaseId,
+                                  notes: milestone.notes,
+                                });
+                                setEditingMilestoneId(milestone.id);
+                                setShowAddMilestone(true);
+                                setSelectedMilestoneIds(new Set());
+                              }}
+                              className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                            >
+                              <Edit size={18} />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                (async () => {
+                                  try {
+                                    await deleteMilestone(milestone.id);
+                                    setSelectedMilestoneIds(prev => {
+                                      const newSet = new Set(prev);
+                                      newSet.delete(milestone.id);
+                                      return newSet;
+                                    });
+                                  } catch (error) {
+                                    console.error('Error deleting milestone:', error);
+                                    alert('Failed to delete milestone. Please try again.');
+                                  }
+                                })();
+                              }}
+                              className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
+          
+          {/* Unassigned milestones */}
+          {unassignedMilestones.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+                <h3 className="font-semibold text-gray-900 dark:text-white">
+                  Unassigned Milestones
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {unassignedMilestones.length} milestone{unassignedMilestones.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+              <div>
+                {unassignedMilestones.map((milestone) => (
+                  <div
+                    key={milestone.id}
+                    className={`border-l-4 p-4 transition-all ${
+                      selectedMilestoneIds.has(milestone.id) ? 'ring-2 ring-accent-purple ring-offset-2 bg-accent-purple/5 dark:bg-accent-purple/10' : ''
+                    }`}
+                    style={{ borderLeftColor: '#9ca3af' }}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleMilestoneSelection(milestone.id);
+                        }}
+                        className="mt-1 flex-shrink-0"
+                      >
+                        {selectedMilestoneIds.has(milestone.id) ? (
+                          <CheckSquare size={20} className="text-accent-purple" />
+                        ) : (
+                          <Square size={20} className="text-gray-400 dark:text-gray-500" />
+                        )}
+                      </button>
+                      
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{milestone.title}</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
+                        </p>
+                        {milestone.notes && (
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">{milestone.notes}</p>
+                        )}
+                      </div>
+                      <div className="flex gap-2 ml-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMilestoneForm({
+                              title: milestone.title,
+                              startDate: milestone.startDate,
+                              endDate: milestone.endDate,
+                              phaseId: milestone.phaseId,
+                              notes: milestone.notes,
+                            });
+                            setEditingMilestoneId(milestone.id);
+                            setShowAddMilestone(true);
+                            setSelectedMilestoneIds(new Set());
+                          }}
+                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            (async () => {
+                              try {
+                                await deleteMilestone(milestone.id);
+                                setSelectedMilestoneIds(prev => {
+                                  const newSet = new Set(prev);
+                                  newSet.delete(milestone.id);
+                                  return newSet;
+                                });
+                              } catch (error) {
+                                console.error('Error deleting milestone:', error);
+                                alert('Failed to delete milestone. Please try again.');
+                              }
+                            })();
+                          }}
+                          className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {sortedMilestones.length === 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-8 text-center">
+              <p className="text-gray-500 dark:text-gray-400">No milestones yet. Add milestones to see them organized by phase.</p>
+            </div>
+          )}
         </div>
       ) : (
         /* Asana-style Timeline View */
