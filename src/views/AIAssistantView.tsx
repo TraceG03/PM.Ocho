@@ -17,7 +17,8 @@ const AIAssistantView: React.FC = () => {
     tasks, 
     photos, 
     files,
-    getFile 
+    getFile,
+    addMilestone
   } = useApp();
   
   const openAIConfigured = isOpenAIConfigured();
@@ -279,6 +280,32 @@ const AIAssistantView: React.FC = () => {
     return `I couldn't find specific information about "${query}" in the uploaded documents.\n\nAvailable documents: ${docList}`;
   };
 
+  // Parse AI response for milestone creation
+  const parseMilestoneFromResponse = (responseText: string): { title: string; startDate: string; endDate: string; phaseId: string; notes: string } | null => {
+    try {
+      // Try to find JSON in the response
+      const jsonMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed.action === 'add_milestone' && parsed.milestone) {
+          return parsed.milestone;
+        }
+      }
+      
+      // Also check for JSON code blocks
+      const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        const parsed = JSON.parse(codeBlockMatch[1]);
+        if (parsed.action === 'add_milestone' && parsed.milestone) {
+          return parsed.milestone;
+        }
+      }
+    } catch (error) {
+      console.error('Error parsing milestone from response:', error);
+    }
+    return null;
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
 
@@ -296,6 +323,7 @@ const AIAssistantView: React.FC = () => {
 
     try {
       let response = '';
+      let milestoneAdded = false;
 
       if (openAIConfigured && openai) {
         // Use OpenAI ChatGPT
@@ -323,6 +351,20 @@ You have complete visibility into:
 - Project progress and status
 - Dates, schedules, and deadlines
 
+IMPORTANT: You can ADD MILESTONES to the timeline! When the user asks you to add a milestone, create one, or schedule something, respond with a JSON object in this exact format:
+{
+  "action": "add_milestone",
+  "milestone": {
+    "title": "Milestone Title",
+    "startDate": "YYYY-MM-DD",
+    "endDate": "YYYY-MM-DD",
+    "phaseId": "phase_id_here",
+    "notes": "Optional notes about the milestone"
+  }
+}
+
+For phaseId, use the ID of an existing phase. If the user doesn't specify a phase, use the first available phase ID, or if no phases exist, use an empty string.
+
 When answering questions:
 - Reference SPECIFIC data from the project (e.g., "You have 3 milestones coming up in the next 2 weeks: Foundation Complete on Jan 15, Framing Start on Jan 20...")
 - Use actual milestone names, task names, dates, and details from the project
@@ -331,6 +373,7 @@ When answering questions:
 - Reference specific information from uploaded documents when available
 - Provide practical, actionable advice based on the actual project state
 - If asked about something not in the data, say so clearly
+- When adding milestones, extract dates from the user's request (e.g., "next week", "January 15", "in 2 weeks" should be converted to actual dates)
 
 You can answer questions like:
 - "What milestones do I have coming up?"
@@ -339,13 +382,15 @@ You can answer questions like:
 - "What does my timeline look like?"
 - "What tasks are high priority?"
 - "What information is in my documents about [topic]?"
+- "Add a milestone for [task] on [date]"
+- "Create a milestone for [description]"
 - And any other question about the project data`;
 
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'system', content: `Here is the complete project data:\n\n${appContext}` },
+            { role: 'system', content: `Here is the complete project data:\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` },
             ...messages.slice(-5).map(msg => ({
               role: (msg.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
               content: msg.text
@@ -357,6 +402,42 @@ You can answer questions like:
         });
 
         response = completion.choices[0]?.message?.content || 'I apologize, but I encountered an error generating a response.';
+        
+        // Check if AI wants to add a milestone
+        const milestoneData = parseMilestoneFromResponse(response);
+        if (milestoneData) {
+          try {
+            // Validate milestone data
+            if (!milestoneData.title || !milestoneData.startDate || !milestoneData.endDate) {
+              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
+              response += '\n\nI tried to add a milestone, but I need more information. Please provide: title, start date, and end date.';
+            } else {
+              // Use provided phaseId or default to first phase
+              let phaseId = milestoneData.phaseId;
+              if (!phaseId && phases.length > 0) {
+                phaseId = phases[0].id;
+              }
+              
+              await addMilestone({
+                title: milestoneData.title,
+                startDate: milestoneData.startDate,
+                endDate: milestoneData.endDate,
+                phaseId: phaseId || '',
+                notes: milestoneData.notes || '',
+              });
+              
+              milestoneAdded = true;
+              // Remove the JSON from the response and add confirmation
+              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
+              response = response.replace(/```(?:json)?\s*\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}\s*```/g, '');
+              response += `\n\n✅ Successfully added milestone "${milestoneData.title}" to your timeline (${milestoneData.startDate} to ${milestoneData.endDate})!`;
+            }
+          } catch (error: any) {
+            console.error('Error adding milestone:', error);
+            response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
+            response += `\n\n❌ I encountered an error adding the milestone: ${error.message || 'Unknown error'}`;
+          }
+        }
       } else {
         // Fallback to rule-based
         if (documents.length > 0) {
