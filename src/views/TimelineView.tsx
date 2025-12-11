@@ -336,37 +336,37 @@ const TimelineView: React.FC = () => {
         return [];
       }
       end.setHours(23, 59, 59, 999);
-    
-    if (zoomLevel === 1) {
-      // Daily view - start from exact timeline start
-      while (current <= end) {
-        headers.push(new Date(current));
-        current.setDate(current.getDate() + 1);
+      
+      if (zoomLevel === 1) {
+        // Daily view - start from exact timeline start
+        while (current <= end) {
+          headers.push(new Date(current));
+          current.setDate(current.getDate() + 1);
+        }
+      } else if (zoomLevel === 2) {
+        // Weekly view - start from the Monday of the week containing timeline start
+        const dayOfWeek = current.getDay();
+        const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Days to subtract to get to Monday
+        current.setDate(current.getDate() + daysToMonday);
+        while (current <= end) {
+          headers.push(new Date(current));
+          const nextWeek = new Date(current);
+          nextWeek.setDate(nextWeek.getDate() + 7);
+          current = nextWeek;
+        }
+      } else {
+        // Monthly view - start from the first day of the month containing timeline start
+        current.setDate(1); // First day of the month
+        while (current <= end) {
+          headers.push(new Date(current));
+          const nextMonth = new Date(current);
+          nextMonth.setMonth(nextMonth.getMonth() + 1);
+          nextMonth.setDate(1); // Ensure we stay on the 1st of each month
+          current = nextMonth;
+        }
       }
-    } else if (zoomLevel === 2) {
-      // Weekly view - start from the Monday of the week containing timeline start
-      const dayOfWeek = current.getDay();
-      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Days to subtract to get to Monday
-      current.setDate(current.getDate() + daysToMonday);
-      while (current <= end) {
-        headers.push(new Date(current));
-        const nextWeek = new Date(current);
-        nextWeek.setDate(nextWeek.getDate() + 7);
-        current = nextWeek;
-      }
-    } else {
-      // Monthly view - start from the first day of the month containing timeline start
-      current.setDate(1); // First day of the month
-      while (current <= end) {
-        headers.push(new Date(current));
-        const nextMonth = new Date(current);
-        nextMonth.setMonth(nextMonth.getMonth() + 1);
-        nextMonth.setDate(1); // Ensure we stay on the 1st of each month
-        current = nextMonth;
-      }
-    }
-    
-    return headers;
+      
+      return headers;
     } catch (error) {
       console.error('Error generating date headers:', error);
       return [];
