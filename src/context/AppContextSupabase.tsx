@@ -87,6 +87,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: t.id,
         name: t.name,
         date: t.date,
+        endDate: t.end_date || undefined,
         category: t.category,
         priority: t.priority,
         crew: t.crew || '',
@@ -281,6 +282,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id,
         name: task.name,
         date: task.date,
+        end_date: task.endDate || null,
         category: task.category,
         priority: task.priority,
         crew: task.crew || '',
@@ -302,6 +304,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateData: any = {};
     if (updatedTask.name !== undefined) updateData.name = updatedTask.name;
     if (updatedTask.date !== undefined) updateData.date = updatedTask.date;
+    if (updatedTask.endDate !== undefined) updateData.end_date = updatedTask.endDate || null;
     if (updatedTask.category !== undefined) updateData.category = updatedTask.category;
     if (updatedTask.priority !== undefined) updateData.priority = updatedTask.priority;
     if (updatedTask.crew !== undefined) updateData.crew = updatedTask.crew;

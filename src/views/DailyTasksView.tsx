@@ -15,6 +15,8 @@ const DailyTasksView: React.FC = () => {
   
   const [newTaskName, setNewTaskName] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedEndDate, setSelectedEndDate] = useState<string | null>(null);
+  const [showDateRange, setShowDateRange] = useState(false);
 
   // Get the 7 days of the current week
   const getWeekDays = () => {
@@ -38,10 +40,16 @@ const DailyTasksView: React.FC = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // Get tasks for a specific date
+  // Get tasks for a specific date (including multi-day tasks that span this date)
   const getTasksForDate = (date: Date) => {
     const dateStr = formatDate(date);
-    return tasks.filter(task => task.date === dateStr);
+    return tasks.filter(task => {
+      const taskStart = task.date;
+      const taskEnd = task.endDate || task.date; // If no endDate, it's a single-day task
+      
+      // Check if the date falls within the task's date range
+      return dateStr >= taskStart && dateStr <= taskEnd;
+    });
   };
 
   // Navigate to previous week
@@ -73,11 +81,19 @@ const DailyTasksView: React.FC = () => {
     if (!newTaskName.trim()) return;
 
     const targetDate = selectedDate || formatDate(new Date());
+    const targetEndDate = showDateRange && selectedEndDate ? selectedEndDate : null;
+    
+    // Ensure end date is not before start date
+    if (targetEndDate && targetEndDate < targetDate) {
+      alert('End date cannot be before start date');
+      return;
+    }
     
     try {
       await addTask({
         name: newTaskName.trim(),
         date: targetDate,
+        endDate: targetEndDate || undefined,
         category: 'General',
         priority: 'Normal',
         crew: '',
@@ -86,6 +102,8 @@ const DailyTasksView: React.FC = () => {
       });
       setNewTaskName('');
       setSelectedDate(null);
+      setSelectedEndDate(null);
+      setShowDateRange(false);
     } catch (error) {
       console.error('Error adding task:', error);
       alert('Failed to add task. Please try again.');
@@ -157,37 +175,98 @@ const DailyTasksView: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
             <Calendar size={16} />
-            <span>Task will be added to {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'today'}</span>
-            {selectedDate && (
+            <span>
+              {showDateRange && selectedDate && selectedEndDate
+                ? `${new Date(selectedDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(selectedEndDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                : selectedDate
+                ? new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+                : 'today'}
+            </span>
+            {(selectedDate || selectedEndDate) && (
               <button
-                onClick={() => setSelectedDate(null)}
+                onClick={() => {
+                  setSelectedDate(null);
+                  setSelectedEndDate(null);
+                  setShowDateRange(false);
+                }}
                 className="ml-auto text-xs text-accent-purple hover:underline"
               >
                 Clear
               </button>
             )}
           </div>
-          <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
-            {weekDays.map((day) => {
-              const dayDateStr = formatDate(day);
-              const isSelected = selectedDate === dayDateStr;
-              return (
-                <button
-                  key={dayDateStr}
-                  onClick={() => setSelectedDate(isSelected ? null : dayDateStr)}
-                  className={`px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-colors ${
-                    isSelected
-                      ? 'bg-accent-purple text-white'
-                      : isToday(day)
-                      ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                  }`}
-                >
-                  {getDayName(day).substring(0, 3)} {day.getDate()}
-                </button>
-              );
-            })}
+          
+          {/* Date Range Toggle */}
+          <div className="mb-2">
+            <button
+              onClick={() => setShowDateRange(!showDateRange)}
+              className="text-xs text-accent-purple hover:underline"
+            >
+              {showDateRange ? 'Single day task' : 'Multi-day task'}
+            </button>
           </div>
+          
+          {!showDateRange ? (
+            // Single day selection
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+              {weekDays.map((day) => {
+                const dayDateStr = formatDate(day);
+                const isSelected = selectedDate === dayDateStr;
+                return (
+                  <button
+                    key={dayDateStr}
+                    onClick={() => setSelectedDate(isSelected ? null : dayDateStr)}
+                    className={`px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                      isSelected
+                        ? 'bg-accent-purple text-white'
+                        : isToday(day)
+                        ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    {getDayName(day).substring(0, 3)} {day.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            // Date range selection
+            <div className="mt-2 space-y-2">
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Start Date</label>
+                <input
+                  type="date"
+                  value={selectedDate || ''}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    // If end date is before new start date, clear it
+                    if (selectedEndDate && e.target.value && selectedEndDate < e.target.value) {
+                      setSelectedEndDate(null);
+                    }
+                  }}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">End Date</label>
+                <input
+                  type="date"
+                  value={selectedEndDate || ''}
+                  onChange={(e) => {
+                    const endDate = e.target.value;
+                    // Ensure end date is not before start date
+                    if (selectedDate && endDate && endDate < selectedDate) {
+                      alert('End date cannot be before start date');
+                      return;
+                    }
+                    setSelectedEndDate(endDate);
+                  }}
+                  min={selectedDate || undefined}
+                  className="w-full px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -251,14 +330,23 @@ const DailyTasksView: React.FC = () => {
               {/* Tasks List */}
               <div className="p-4 space-y-2">
                 {dayTasks.length > 0 ? (
-                  dayTasks.map((task) => (
-                    <div
-                      key={task.id}
-                      className={`flex items-start gap-3 p-3 rounded-xl border-l-4 ${
-                        task.completed ? 'opacity-60 bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-700/30'
-                      }`}
-                      style={{ borderLeftColor: task.priority === 'High' ? '#ef4444' : '#3b82f6' }}
-                    >
+                  dayTasks.map((task) => {
+                    const isMultiDay = task.endDate && task.endDate !== task.date;
+                    const isStartDay = task.date === formatDate(day);
+                    const isEndDay = task.endDate ? task.endDate === formatDate(day) : task.date === formatDate(day);
+                    const isMiddleDay = isMultiDay && !isStartDay && !isEndDay;
+                    
+                    return (
+                      <div
+                        key={`${task.id}-${formatDate(day)}`}
+                        className={`flex items-start gap-3 p-3 rounded-xl border-l-4 ${
+                          task.completed ? 'opacity-60 bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-700/30'
+                        } ${isMiddleDay ? 'border-l-2' : ''}`}
+                        style={{ 
+                          borderLeftColor: task.priority === 'High' ? '#ef4444' : '#3b82f6',
+                          borderLeftStyle: isMiddleDay ? 'dashed' : 'solid'
+                        }}
+                      >
                       <button
                         onClick={() => handleToggleComplete(task.id, task.completed)}
                         className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
@@ -273,6 +361,13 @@ const DailyTasksView: React.FC = () => {
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className={`font-medium ${task.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
                             {task.name}
+                            {isMultiDay && (
+                              <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                                {isStartDay && '→'}
+                                {isMiddleDay && '⋯'}
+                                {isEndDay && !isStartDay && '←'}
+                              </span>
+                            )}
                           </h4>
                           {task.priority === 'High' && (
                             <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs font-medium">
@@ -289,6 +384,13 @@ const DailyTasksView: React.FC = () => {
                         {task.notes && (
                           <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{task.notes}</p>
                         )}
+                        {isMultiDay && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {isStartDay && `Ends: ${new Date(task.endDate!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                            {isEndDay && !isStartDay && `Started: ${new Date(task.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`}
+                            {isMiddleDay && 'Multi-day task'}
+                          </p>
+                        )}
                       </div>
                       <button
                         onClick={async () => {
@@ -304,7 +406,8 @@ const DailyTasksView: React.FC = () => {
                         <Trash2 size={18} />
                       </button>
                     </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="text-center py-6 text-gray-400 dark:text-gray-500">
                     <p className="text-sm">No tasks for this day</p>

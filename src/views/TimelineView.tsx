@@ -270,13 +270,11 @@ const TimelineView: React.FC = () => {
     const start = parseLocalDate(milestone.startDate);
     const end = parseLocalDate(milestone.endDate);
     
-    // Get the first date header to use as reference point
+    // Get the date headers to find which header index the milestone falls into
     const dateHeaders = getDateHeaders();
     if (dateHeaders.length === 0) {
       return { left: '0px', width: '60px' };
     }
-    const firstHeader = new Date(dateHeaders[0]);
-    firstHeader.setHours(0, 0, 0, 0);
     
     // Normalize dates to start of day for consistent calculation
     const startDate = new Date(start);
@@ -285,37 +283,118 @@ const TimelineView: React.FC = () => {
     endDate.setHours(0, 0, 0, 0);
     
     let dayWidth: number;
-    let startDays: number;
-    let endDays: number;
+    let startIndex: number;
+    let endIndex: number;
     
     if (zoomLevel === 1) {
-      // Daily view - calculate in days
+      // Daily view - find the exact day header index
       dayWidth = 80;
-      startDays = Math.round((startDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
-      endDays = Math.round((endDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
-    } else if (zoomLevel === 2) {
-      // Weekly view - calculate in weeks
-      dayWidth = 120;
-      startDays = Math.round((startDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
-      endDays = Math.round((endDate.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
-    } else {
-      // Monthly view - calculate in months
-      dayWidth = 150;
-      const startYear = startDate.getFullYear();
-      const startMonth = startDate.getMonth();
-      const endYear = endDate.getFullYear();
-      const endMonth = endDate.getMonth();
-      const firstYear = firstHeader.getFullYear();
-      const firstMonth = firstHeader.getMonth();
+      startIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getTime() === startDate.getTime();
+      });
+      endIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getTime() === endDate.getTime();
+      });
       
-      startDays = (startYear - firstYear) * 12 + (startMonth - firstMonth);
-      endDays = (endYear - firstYear) * 12 + (endMonth - firstMonth);
+      // If exact match not found, find the closest header
+      if (startIndex === -1) {
+        startIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate.getTime() >= startDate.getTime();
+        });
+        if (startIndex === -1) startIndex = 0;
+      }
+      if (endIndex === -1) {
+        endIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate.getTime() >= endDate.getTime();
+        });
+        if (endIndex === -1) endIndex = dateHeaders.length - 1;
+      }
+    } else if (zoomLevel === 2) {
+      // Weekly view - find which week header the date falls into
+      dayWidth = 120;
+      startIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(headerDate);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        return startDate >= headerDate && startDate <= weekEnd;
+      });
+      endIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(headerDate);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        return endDate >= headerDate && endDate <= weekEnd;
+      });
+      
+      // If not found, find the closest week
+      if (startIndex === -1) {
+        startIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= startDate;
+        });
+        if (startIndex === -1) startIndex = 0;
+      }
+      if (endIndex === -1) {
+        endIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= endDate;
+        });
+        if (endIndex === -1) endIndex = dateHeaders.length - 1;
+      }
+    } else {
+      // Monthly view - find which month header the date falls into
+      dayWidth = 150;
+      startIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getFullYear() === startDate.getFullYear() && 
+               headerDate.getMonth() === startDate.getMonth();
+      });
+      endIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getFullYear() === endDate.getFullYear() && 
+               headerDate.getMonth() === endDate.getMonth();
+      });
+      
+      // If not found, find the closest month
+      if (startIndex === -1) {
+        startIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= startDate;
+        });
+        if (startIndex === -1) startIndex = 0;
+      }
+      if (endIndex === -1) {
+        endIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= endDate;
+        });
+        if (endIndex === -1) endIndex = dateHeaders.length - 1;
+      }
     }
     
-    const duration = Math.max(1, endDays - startDays + 1);
+    // Ensure valid indices
+    startIndex = Math.max(0, Math.min(startIndex, dateHeaders.length - 1));
+    endIndex = Math.max(0, Math.min(endIndex, dateHeaders.length - 1));
     
-    // Calculate position in pixels
-    const left = startDays * dayWidth;
+    const duration = Math.max(1, endIndex - startIndex + 1);
+    
+    // Calculate position in pixels based on header index
+    const left = startIndex * dayWidth;
     const width = duration * dayWidth;
     
     return { left: `${left}px`, width: `${Math.max(width, 60)}px` };
@@ -327,34 +406,69 @@ const TimelineView: React.FC = () => {
     today.setHours(0, 0, 0, 0);
     if (today < timelineStart || today > timelineEnd) return null;
     
-    // Get the first date header to use as reference point
+    // Get the date headers to find which header index today falls into
     const dateHeaders = getDateHeaders();
     if (dateHeaders.length === 0) return null;
-    const firstHeader = new Date(dateHeaders[0]);
-    firstHeader.setHours(0, 0, 0, 0);
     
     let dayWidth: number;
-    let todayDays: number;
+    let todayIndex: number;
     
     if (zoomLevel === 1) {
-      // Daily view
+      // Daily view - find exact day
       dayWidth = 80;
-      todayDays = Math.round((today.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24));
+      todayIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getTime() === today.getTime();
+      });
+      if (todayIndex === -1) {
+        todayIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= today;
+        });
+        if (todayIndex === -1) return null;
+      }
     } else if (zoomLevel === 2) {
-      // Weekly view
+      // Weekly view - find which week today falls into
       dayWidth = 120;
-      todayDays = Math.round((today.getTime() - firstHeader.getTime()) / (1000 * 60 * 60 * 24 * 7));
+      todayIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        const weekEnd = new Date(headerDate);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        return today >= headerDate && today <= weekEnd;
+      });
+      if (todayIndex === -1) {
+        todayIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= today;
+        });
+        if (todayIndex === -1) return null;
+      }
     } else {
-      // Monthly view
+      // Monthly view - find which month today falls into
       dayWidth = 150;
-      const todayYear = today.getFullYear();
-      const todayMonth = today.getMonth();
-      const firstYear = firstHeader.getFullYear();
-      const firstMonth = firstHeader.getMonth();
-      todayDays = (todayYear - firstYear) * 12 + (todayMonth - firstMonth);
+      todayIndex = dateHeaders.findIndex(header => {
+        const headerDate = new Date(header);
+        headerDate.setHours(0, 0, 0, 0);
+        return headerDate.getFullYear() === today.getFullYear() && 
+               headerDate.getMonth() === today.getMonth();
+      });
+      if (todayIndex === -1) {
+        todayIndex = dateHeaders.findIndex(header => {
+          const headerDate = new Date(header);
+          headerDate.setHours(0, 0, 0, 0);
+          return headerDate >= today;
+        });
+        if (todayIndex === -1) return null;
+      }
     }
     
-    const position = todayDays * dayWidth;
+    if (todayIndex === -1 || todayIndex < 0 || todayIndex >= dateHeaders.length) return null;
+    
+    const position = todayIndex * dayWidth;
     return `${position}px`;
   };
 

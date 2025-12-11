@@ -21,6 +21,7 @@ export interface Task {
   id: string;
   name: string;
   date: string;
+  endDate?: string; // Optional end date for multi-day tasks
   category: string;
   priority: 'Normal' | 'High';
   crew: string;
@@ -257,6 +258,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id,
       name: task.name,
       date: task.date,
+      end_date: task.endDate || null,
       category: task.category,
       priority: task.priority,
       crew: task.crew || '',
@@ -272,6 +274,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updateData: any = {};
     if (updatedTask.name !== undefined) updateData.name = updatedTask.name;
     if (updatedTask.date !== undefined) updateData.date = updatedTask.date;
+    if (updatedTask.endDate !== undefined) updateData.end_date = updatedTask.endDate || null;
     if (updatedTask.category !== undefined) updateData.category = updatedTask.category;
     if (updatedTask.priority !== undefined) updateData.priority = updatedTask.priority;
     if (updatedTask.crew !== undefined) updateData.crew = updatedTask.crew;
