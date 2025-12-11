@@ -106,7 +106,7 @@ const TimelineView: React.FC = () => {
   };
 
   // Sort milestones by start date (needed for both list and calendar views)
-  const sortedMilestones = [...milestones].sort((a, b) => {
+  const sortedMilestones = [...(milestones || [])].sort((a, b) => {
     try {
       const dateA = parseLocalDate(a.startDate);
       const dateB = parseLocalDate(b.startDate);
@@ -119,7 +119,7 @@ const TimelineView: React.FC = () => {
   });
 
   // Group milestones by phase
-  const milestonesByPhase = (phases || []).reduce((acc, phase) => {
+  const milestonesByPhase: Record<string, typeof sortedMilestones> = (phases || []).reduce((acc, phase) => {
     try {
       const phaseMilestones = sortedMilestones.filter(m => m.phaseId === phase.id);
       if (phaseMilestones.length > 0) {
@@ -132,15 +132,22 @@ const TimelineView: React.FC = () => {
   }, {} as Record<string, typeof sortedMilestones>);
 
   // Milestones without a phase or with an unknown phase
-  const unassignedMilestones = sortedMilestones.filter(m => {
-    try {
-      const phase = (phases || []).find(p => p.id === m.phaseId);
-      return !phase || !milestonesByPhase[m.phaseId];
-    } catch (error) {
-      console.error('Error filtering unassigned milestones:', error, m);
-      return false;
-    }
-  });
+  // Initialize as empty array to ensure it's always defined
+  let unassignedMilestones: typeof sortedMilestones = [];
+  try {
+    unassignedMilestones = sortedMilestones.filter(m => {
+      try {
+        const phase = (phases || []).find(p => p.id === m.phaseId);
+        return !phase || !milestonesByPhase[m.phaseId];
+      } catch (error) {
+        console.error('Error filtering unassigned milestones:', error, m);
+        return false;
+      }
+    });
+  } catch (error) {
+    console.error('Error calculating unassigned milestones:', error);
+    unassignedMilestones = [];
+  }
 
   // Toggle phase expansion
   const togglePhaseExpansion = (phaseId: string) => {
