@@ -1,66 +1,98 @@
 import React, { useState } from 'react';
-import { Plus, Check, Trash2 } from 'lucide-react';
+import { Plus, Check, Trash2, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 const DailyTasksView: React.FC = () => {
-  const { tasks, milestones, documents, addTask, updateTask, deleteTask } = useApp();
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [quickTodo, setQuickTodo] = useState('');
-  const [taskForm, setTaskForm] = useState({
-    name: '',
-    date: new Date().toISOString().split('T')[0],
-    category: 'General',
-    priority: 'Normal' as 'Normal' | 'High',
-    crew: '',
-    notes: '',
-    relatedMilestoneId: '',
-    relatedDocumentId: '',
+  const { tasks, addTask, updateTask, deleteTask } = useApp();
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
+    const monday = new Date(today.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    return monday;
   });
+  
+  const [newTaskName, setNewTaskName] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  const handleAddQuickTodo = async () => {
-    if (quickTodo.trim()) {
-      try {
-        await addTask({
-          name: quickTodo,
-          date: new Date().toISOString().split('T')[0],
-          category: 'Quick',
-          priority: 'Normal',
-          crew: '',
-          notes: '',
-          completed: false,
-        });
-        setQuickTodo('');
-      } catch (error) {
-        console.error('Error adding quick todo:', error);
-      }
+  // Get the 7 days of the current week
+  const getWeekDays = () => {
+    const days = [];
+    const start = new Date(currentWeekStart);
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(start);
+      date.setDate(start.getDate() + i);
+      days.push(date);
+    }
+    return days;
+  };
+
+  const weekDays = getWeekDays();
+
+  // Format date as YYYY-MM-DD
+  const formatDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Get tasks for a specific date
+  const getTasksForDate = (date: Date) => {
+    const dateStr = formatDate(date);
+    return tasks.filter(task => task.date === dateStr);
+  };
+
+  // Navigate to previous week
+  const goToPreviousWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(newStart.getDate() - 7);
+    setCurrentWeekStart(newStart);
+  };
+
+  // Navigate to next week
+  const goToNextWeek = () => {
+    const newStart = new Date(currentWeekStart);
+    newStart.setDate(newStart.getDate() + 7);
+    setCurrentWeekStart(newStart);
+  };
+
+  // Navigate to current week
+  const goToCurrentWeek = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const monday = new Date(today.setDate(diff));
+    monday.setHours(0, 0, 0, 0);
+    setCurrentWeekStart(monday);
+  };
+
+  // Handle adding a new task
+  const handleAddTask = async () => {
+    if (!newTaskName.trim()) return;
+
+    const targetDate = selectedDate || formatDate(new Date());
+    
+    try {
+      await addTask({
+        name: newTaskName.trim(),
+        date: targetDate,
+        category: 'General',
+        priority: 'Normal',
+        crew: '',
+        notes: '',
+        completed: false,
+      });
+      setNewTaskName('');
+      setSelectedDate(null);
+    } catch (error) {
+      console.error('Error adding task:', error);
+      alert('Failed to add task. Please try again.');
     }
   };
 
-  const handleSaveTask = async () => {
-    if (taskForm.name.trim()) {
-      try {
-        await addTask({
-          ...taskForm,
-          completed: false,
-        });
-        setTaskForm({
-          name: '',
-          date: new Date().toISOString().split('T')[0],
-          category: 'General',
-          priority: 'Normal',
-          crew: '',
-          notes: '',
-          relatedMilestoneId: '',
-          relatedDocumentId: '',
-        });
-        setShowAddTask(false);
-      } catch (error) {
-        console.error('Error saving task:', error);
-        alert('Failed to save task. Please try again.');
-      }
-    }
-  };
-
+  // Handle toggle complete
   const handleToggleComplete = async (id: string, completed: boolean) => {
     try {
       await updateTask(id, { completed: !completed });
@@ -69,220 +101,219 @@ const DailyTasksView: React.FC = () => {
     }
   };
 
-  const groupedTasks = tasks.reduce((acc, task) => {
-    const date = task.date;
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(task);
-    return acc;
-  }, {} as Record<string, typeof tasks>);
+  // Format day name
+  const getDayName = (date: Date) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[date.getDay()];
+  };
 
-  const sortedDates = Object.keys(groupedTasks).sort((a, b) => 
-    new Date(b).getTime() - new Date(a).getTime()
-  );
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+  // Check if date is today
+  const isToday = (date: Date) => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const taskDate = new Date(date);
-    taskDate.setHours(0, 0, 0, 0);
+    return formatDate(date) === formatDate(today);
+  };
 
-    if (taskDate.getTime() === today.getTime()) return 'Today';
-    if (taskDate.getTime() === today.getTime() - 86400000) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  // Format week range
+  const getWeekRange = () => {
+    const start = weekDays[0];
+    const end = weekDays[6];
+    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
+    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
+    
+    if (startMonth === endMonth) {
+      return `${startMonth} ${start.getDate()} - ${end.getDate()}, ${start.getFullYear()}`;
+    }
+    return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}, ${start.getFullYear()}`;
   };
 
   return (
-    <div className="pb-20 min-h-screen bg-gray-50">
+    <div className="pb-20 min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white shadow-sm sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Daily Tasks</h1>
-          <p className="text-sm text-gray-500 mt-1">Plan and track daily work activities</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Weekly Planner</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Plan and organize your week</p>
         </div>
       </div>
 
-      {/* Quick To-Do */}
+      {/* Add Task Section */}
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <div className="flex gap-2">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-4">
+          <div className="flex gap-2 mb-3">
             <input
               type="text"
-              placeholder="Add quick to-do item..."
-              value={quickTodo}
-              onChange={(e) => setQuickTodo(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddQuickTodo()}
-              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
+              placeholder="Add a task..."
+              value={newTaskName}
+              onChange={(e) => setNewTaskName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddTask()}
+              className="flex-1 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-accent-purple"
             />
             <button
-              onClick={handleAddQuickTodo}
+              onClick={handleAddTask}
               className="bg-accent-purple text-white p-3 rounded-xl shadow-sm hover:shadow-md transition-shadow"
             >
               <Plus size={20} />
             </button>
           </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-2">
+            <Calendar size={16} />
+            <span>Task will be added to {selectedDate ? new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'today'}</span>
+            {selectedDate && (
+              <button
+                onClick={() => setSelectedDate(null)}
+                className="ml-auto text-xs text-accent-purple hover:underline"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-2">
+            {weekDays.map((day) => {
+              const dayDateStr = formatDate(day);
+              const isSelected = selectedDate === dayDateStr;
+              return (
+                <button
+                  key={dayDateStr}
+                  onClick={() => setSelectedDate(isSelected ? null : dayDateStr)}
+                  className={`px-3 py-2 rounded-lg text-xs whitespace-nowrap transition-colors ${
+                    isSelected
+                      ? 'bg-accent-purple text-white'
+                      : isToday(day)
+                      ? 'bg-accent-purple/20 text-accent-purple border border-accent-purple'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {getDayName(day).substring(0, 3)} {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* Add Task Form */}
+      {/* Week Navigation */}
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl shadow-sm p-4">
-          <button
-            onClick={() => setShowAddTask(!showAddTask)}
-            className="w-full flex items-center justify-between text-left"
-          >
-            <span className="font-semibold text-gray-900">Add Task</span>
-            <Plus size={20} className="text-gray-400" />
-          </button>
-
-          {showAddTask && (
-            <div className="mt-4 space-y-3">
-              <input
-                type="text"
-                placeholder="Task Name"
-                value={taskForm.name}
-                onChange={(e) => setTaskForm({ ...taskForm, name: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              />
-              <input
-                type="date"
-                value={taskForm.date}
-                onChange={(e) => setTaskForm({ ...taskForm, date: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              />
-              <select
-                value={taskForm.category}
-                onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              >
-                <option value="General">General</option>
-                <option value="Plumbing">Plumbing</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Framing">Framing</option>
-                <option value="Concrete">Concrete</option>
-                <option value="Roofing">Roofing</option>
-              </select>
-              <select
-                value={taskForm.priority}
-                onChange={(e) => setTaskForm({ ...taskForm, priority: e.target.value as 'Normal' | 'High' })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              >
-                <option value="Normal">Normal</option>
-                <option value="High">High</option>
-              </select>
-              <input
-                type="text"
-                placeholder="Crew/Person"
-                value={taskForm.crew}
-                onChange={(e) => setTaskForm({ ...taskForm, crew: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              />
-              <textarea
-                placeholder="Notes"
-                value={taskForm.notes}
-                onChange={(e) => setTaskForm({ ...taskForm, notes: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple resize-none"
-              />
-              <select
-                value={taskForm.relatedMilestoneId}
-                onChange={(e) => setTaskForm({ ...taskForm, relatedMilestoneId: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              >
-                <option value="">Related Milestone (optional)</option>
-                {milestones.map(m => (
-                  <option key={m.id} value={m.id}>{m.title}</option>
-                ))}
-              </select>
-              <select
-                value={taskForm.relatedDocumentId}
-                onChange={(e) => setTaskForm({ ...taskForm, relatedDocumentId: e.target.value })}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple"
-              >
-                <option value="">Related Document (optional)</option>
-                {documents.map(d => (
-                  <option key={d.id} value={d.id}>{d.title}</option>
-                ))}
-              </select>
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <button
+              onClick={goToPreviousWeek}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <ChevronLeft size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+            <div className="flex-1 text-center">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{getWeekRange()}</h2>
               <button
-                onClick={handleSaveTask}
-                className="w-full bg-accent-purple text-white py-3 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow"
+                onClick={goToCurrentWeek}
+                className="text-xs text-accent-purple hover:underline mt-1"
               >
-                Save Task
+                Go to current week
               </button>
             </div>
-          )}
+            <button
+              onClick={goToNextWeek}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            >
+              <ChevronRight size={20} className="text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Tasks List */}
-      <div className="px-4 mt-4 space-y-4">
-        {sortedDates.map(date => (
-          <div key={date}>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">{formatDate(date)}</h2>
-            <div className="space-y-3">
-              {groupedTasks[date].map(task => (
-                <div
-                  key={task.id}
-                  className={`bg-white rounded-3xl shadow-sm p-4 border-l-4 ${
-                    task.completed ? 'opacity-60' : ''
-                  }`}
-                  style={{ borderLeftColor: task.priority === 'High' ? '#ef4444' : '#3b82f6' }}
-                >
-                  <div className="flex items-start gap-3">
-                    <button
-                      onClick={() => handleToggleComplete(task.id, task.completed)}
-                      className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
-                        task.completed
-                          ? 'bg-accent-purple border-accent-purple'
-                          : 'border-gray-300'
+      {/* Weekly View */}
+      <div className="px-4 mt-4 space-y-3">
+        {weekDays.map((day) => {
+          const dayTasks = getTasksForDate(day);
+          const isTodayDate = isToday(day);
+          
+          return (
+            <div key={formatDate(day)} className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm overflow-hidden">
+              {/* Day Header */}
+              <div className={`px-4 py-3 border-b ${
+                isTodayDate ? 'bg-accent-purple/10 dark:bg-accent-purple/20 border-accent-purple' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700'
+              }`}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className={`font-semibold ${isTodayDate ? 'text-accent-purple' : 'text-gray-900 dark:text-white'}`}>
+                      {getDayName(day)}
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {isTodayDate && <span className="ml-2 text-accent-purple font-medium">• Today</span>}
+                    </p>
+                  </div>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">
+                    {dayTasks.length} {dayTasks.length === 1 ? 'task' : 'tasks'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Tasks List */}
+              <div className="p-4 space-y-2">
+                {dayTasks.length > 0 ? (
+                  dayTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      className={`flex items-start gap-3 p-3 rounded-xl border-l-4 ${
+                        task.completed ? 'opacity-60 bg-gray-50 dark:bg-gray-700/50' : 'bg-white dark:bg-gray-700/30'
                       }`}
+                      style={{ borderLeftColor: task.priority === 'High' ? '#ef4444' : '#3b82f6' }}
                     >
-                      {task.completed && <Check size={14} className="text-white" />}
-                    </button>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className={`font-semibold ${task.completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                          {task.name}
-                        </h3>
-                        {task.priority === 'High' && (
-                          <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-medium">
-                            High
-                          </span>
+                      <button
+                        onClick={() => handleToggleComplete(task.id, task.completed)}
+                        className={`mt-1 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          task.completed
+                            ? 'bg-accent-purple border-accent-purple'
+                            : 'border-gray-300 dark:border-gray-600'
+                        }`}
+                      >
+                        {task.completed && <Check size={14} className="text-white" />}
+                      </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className={`font-medium ${task.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+                            {task.name}
+                          </h4>
+                          {task.priority === 'High' && (
+                            <span className="px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs font-medium">
+                              High
+                            </span>
+                          )}
+                        </div>
+                        {task.category !== 'General' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{task.category}</p>
+                        )}
+                        {task.crew && (
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Crew: {task.crew}</p>
+                        )}
+                        {task.notes && (
+                          <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">{task.notes}</p>
                         )}
                       </div>
-                      <div className="flex items-center gap-3 text-sm text-gray-600">
-                        <span>{task.category}</span>
-                        {task.crew && <span>• {task.crew}</span>}
-                      </div>
-                      {task.notes && (
-                        <p className="text-sm text-gray-600 mt-2">{task.notes}</p>
-                      )}
+                      <button
+                        onClick={async () => {
+                          try {
+                            await deleteTask(task.id);
+                          } catch (error) {
+                            console.error('Error deleting task:', error);
+                            alert('Failed to delete task. Please try again.');
+                          }
+                        }}
+                        className="p-2 text-gray-400 dark:text-gray-500 hover:text-red-500 dark:hover:text-red-400 flex-shrink-0"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
-                    <button
-                      onClick={async () => {
-                        try {
-                          await deleteTask(task.id);
-                        } catch (error) {
-                          console.error('Error deleting task:', error);
-                          alert('Failed to delete task. Please try again.');
-                        }
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-500"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                  ))
+                ) : (
+                  <div className="text-center py-6 text-gray-400 dark:text-gray-500">
+                    <p className="text-sm">No tasks for this day</p>
                   </div>
-                </div>
-              ))}
+                )}
+              </div>
             </div>
-          </div>
-        ))}
-        {tasks.length === 0 && (
-          <div className="bg-white rounded-3xl shadow-sm p-8 text-center">
-            <p className="text-gray-500">No tasks yet. Add your first task above!</p>
-          </div>
-        )}
+          );
+        })}
       </div>
     </div>
   );

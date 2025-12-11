@@ -285,17 +285,17 @@ const TimelineView: React.FC = () => {
   const dateHeaders = getDateHeaders();
 
   return (
-    <div className={`min-h-screen bg-gray-50 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
+    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
       {/* Header */}
-      <div className="bg-white shadow-sm sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Timeline</h1>
-          <p className="text-sm text-gray-500 mt-1">Project phases and milestones</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Timeline</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Project phases and milestones</p>
         </div>
 
         {/* Controls */}
         <div className="px-4 pb-4 flex items-center justify-between gap-3">
-          <div className="flex bg-gray-100 rounded-xl p-1">
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
             <button
               onClick={() => {
                 setViewMode('list');
@@ -303,8 +303,8 @@ const TimelineView: React.FC = () => {
               }}
               className={`px-4 py-2 rounded-lg transition-all ${
                 viewMode === 'list'
-                  ? 'bg-white text-accent-purple shadow-sm font-medium'
-                  : 'text-gray-600'
+                  ? 'bg-white dark:bg-gray-600 text-accent-purple shadow-sm font-medium'
+                  : 'text-gray-600 dark:text-gray-300'
               }`}
             >
               <List size={18} />
@@ -316,8 +316,8 @@ const TimelineView: React.FC = () => {
               }}
               className={`px-4 py-2 rounded-lg transition-all ${
                 viewMode === 'calendar'
-                  ? 'bg-white text-accent-purple shadow-sm font-medium'
-                  : 'text-gray-600'
+                  ? 'bg-white dark:bg-gray-600 text-accent-purple shadow-sm font-medium'
+                  : 'text-gray-600 dark:text-gray-300'
               }`}
             >
               <Calendar size={18} />
@@ -334,7 +334,7 @@ const TimelineView: React.FC = () => {
 
       {/* Add Milestone Section */}
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-4">
           <button
             onClick={() => {
               setEditingMilestoneId(null);
@@ -342,8 +342,8 @@ const TimelineView: React.FC = () => {
             }}
             className="w-full flex items-center justify-between text-left"
           >
-            <span className="font-semibold text-gray-900">Add Milestone</span>
-            <Plus size={20} className="text-gray-400" />
+            <span className="font-semibold text-gray-900 dark:text-white">Add Milestone</span>
+            <Plus size={20} className="text-gray-400 dark:text-gray-500" />
           </button>
 
           {showAddMilestone && (

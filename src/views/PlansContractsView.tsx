@@ -169,24 +169,24 @@ const PlansContractsView: React.FC = () => {
   };
 
   return (
-    <div className="pb-20 min-h-screen bg-gray-50">
+    <div className="pb-20 min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="bg-white shadow-sm sticky top-0 z-10">
+      <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
         <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900">Plans & Contracts</h1>
-          <p className="text-sm text-gray-500 mt-1">Upload and manage project documents</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Plans & Contracts</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Upload and manage project documents</p>
         </div>
       </div>
 
       {/* Upload Section */}
       <div className="px-4 mt-4">
-        <div className="bg-white rounded-3xl shadow-sm p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm p-4">
           <button
             onClick={() => setShowUpload(!showUpload)}
             className="w-full flex items-center justify-between text-left"
           >
-            <span className="font-semibold text-gray-900">Upload Document</span>
-            <Plus size={20} className="text-gray-400" />
+            <span className="font-semibold text-gray-900 dark:text-white">Upload Document</span>
+            <Plus size={20} className="text-gray-400 dark:text-gray-500" />
           </button>
 
           {showUpload && (
