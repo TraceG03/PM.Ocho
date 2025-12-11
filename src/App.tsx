@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AppProvider } from './context/AppContext';
 import { ThemeProvider } from './context/ThemeContext';
+import ErrorBoundary from './components/ErrorBoundary';
 import BottomNav from './components/BottomNav';
 import TimelineView from './views/TimelineView';
 import DailyTasksView from './views/DailyTasksView';
@@ -29,14 +30,18 @@ function App() {
   };
 
   return (
-    <ThemeProvider>
-      <AppProvider>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
-          {renderView()}
-          <BottomNav currentView={currentView} onViewChange={setCurrentView} />
-        </div>
-      </AppProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AppProvider>
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors">
+            <ErrorBoundary>
+              {renderView()}
+            </ErrorBoundary>
+            <BottomNav currentView={currentView} onViewChange={setCurrentView} />
+          </div>
+        </AppProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 

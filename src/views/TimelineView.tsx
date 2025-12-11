@@ -22,10 +22,11 @@ const TimelineView: React.FC = () => {
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
   const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
-  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(phases.map(p => p.id))); // All phases expanded by default
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set((phases || []).map(p => p.id))); // All phases expanded by default
 
   // Update expanded phases when phases change
   useEffect(() => {
+    if (!phases || phases.length === 0) return;
     setExpandedPhases(prev => {
       const newSet = new Set(prev);
       // Add any new phases
@@ -116,6 +117,53 @@ const TimelineView: React.FC = () => {
       return 0;
     }
   });
+
+  // Group milestones by phase
+  const milestonesByPhase = (phases || []).reduce((acc, phase) => {
+    try {
+      const phaseMilestones = sortedMilestones.filter(m => m.phaseId === phase.id);
+      if (phaseMilestones.length > 0) {
+        acc[phase.id] = phaseMilestones;
+      }
+    } catch (error) {
+      console.error('Error grouping milestones by phase:', error, phase);
+    }
+    return acc;
+  }, {} as Record<string, typeof sortedMilestones>);
+
+  // Milestones without a phase or with an unknown phase
+  const unassignedMilestones = sortedMilestones.filter(m => {
+    try {
+      const phase = (phases || []).find(p => p.id === m.phaseId);
+      return !phase || !milestonesByPhase[m.phaseId];
+    } catch (error) {
+      console.error('Error filtering unassigned milestones:', error, m);
+      return false;
+    }
+  });
+
+  // Toggle phase expansion
+  const togglePhaseExpansion = (phaseId: string) => {
+    setExpandedPhases(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(phaseId)) {
+        newSet.delete(phaseId);
+      } else {
+        newSet.add(phaseId);
+      }
+      return newSet;
+    });
+  };
+
+  // Expand/collapse all phases
+  const toggleExpandAll = () => {
+    const phasesList = phases || [];
+    if (expandedPhases.size === phasesList.length) {
+      setExpandedPhases(new Set());
+    } else {
+      setExpandedPhases(new Set(phasesList.map(p => p.id)));
+    }
+  };
 
   // Multi-select handlers (moved after sortedMilestones to avoid reference errors)
   const toggleMilestoneSelection = (milestoneId: string) => {
@@ -732,12 +780,12 @@ const TimelineView: React.FC = () => {
                       : 'Select All'}
                   </span>
                 </button>
-                {phases.length > 0 && (
+                {(phases || []).length > 0 && (
                   <button
                     onClick={toggleExpandAll}
                     className="text-sm text-accent-purple hover:underline"
                   >
-                    {expandedPhases.size === phases.length ? 'Collapse All' : 'Expand All'}
+                    {expandedPhases.size === (phases || []).length ? 'Collapse All' : 'Expand All'}
                   </button>
                 )}
               </div>
@@ -745,7 +793,7 @@ const TimelineView: React.FC = () => {
           )}
           
           {/* Milestones grouped by phase */}
-          {phases.map((phase) => {
+          {(phases || []).map((phase) => {
             const phaseMilestones = milestonesByPhase[phase.id] || [];
             if (phaseMilestones.length === 0) return null;
             
