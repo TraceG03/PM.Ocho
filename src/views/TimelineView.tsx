@@ -309,8 +309,9 @@ const TimelineView: React.FC = () => {
         nextMonth.setDate(1); // Ensure we stay on the 1st of each month
         current = nextMonth;
       }
-      
-      return headers;
+    }
+    
+    return headers;
     } catch (error) {
       console.error('Error generating date headers:', error);
       return [];
