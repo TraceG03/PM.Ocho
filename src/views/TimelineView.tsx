@@ -105,9 +105,17 @@ const TimelineView: React.FC = () => {
   };
 
   // Sort milestones by start date (needed for both list and calendar views)
-  const sortedMilestones = [...milestones].sort((a, b) => 
-    parseLocalDate(a.startDate).getTime() - parseLocalDate(b.startDate).getTime()
-  );
+  const sortedMilestones = [...milestones].sort((a, b) => {
+    try {
+      const dateA = parseLocalDate(a.startDate);
+      const dateB = parseLocalDate(b.startDate);
+      if (isNaN(dateA.getTime()) || isNaN(dateB.getTime())) return 0;
+      return dateA.getTime() - dateB.getTime();
+    } catch (error) {
+      console.error('Error sorting milestones:', error, a, b);
+      return 0;
+    }
+  });
 
   // Multi-select handlers (moved after sortedMilestones to avoid reference errors)
   const toggleMilestoneSelection = (milestoneId: string) => {
@@ -193,12 +201,29 @@ const TimelineView: React.FC = () => {
       return { start, end };
     }
 
-    const dates = milestones.flatMap(m => [
-      parseLocalDate(m.startDate),
-      parseLocalDate(m.endDate)
-    ]);
-    const start = new Date(Math.min(...dates.map(d => d.getTime())));
-    let end = new Date(Math.max(...dates.map(d => d.getTime())));
+    try {
+      const dates = milestones.flatMap(m => {
+        try {
+          return [parseLocalDate(m.startDate), parseLocalDate(m.endDate)];
+        } catch (e) {
+          console.error('Error parsing milestone date:', m, e);
+          return [];
+        }
+      }).filter(d => d && !isNaN(d.getTime()));
+      
+      if (dates.length === 0) {
+        // Fallback if all dates are invalid
+        const start = new Date();
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date();
+        end.setFullYear(end.getFullYear() + 2);
+        end.setHours(23, 59, 59, 999);
+        return { start, end };
+      }
+      
+      const start = new Date(Math.min(...dates.map(d => d.getTime())));
+      let end = new Date(Math.max(...dates.map(d => d.getTime())));
     
     // Normalize to start/end of day
     start.setHours(0, 0, 0, 0);
@@ -224,18 +249,38 @@ const TimelineView: React.FC = () => {
     end.setHours(23, 59, 59, 999);
     
     return { start, end };
+    } catch (error) {
+      console.error('Error calculating timeline range:', error);
+      // Fallback to default range
+      const start = new Date();
+      start.setDate(1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date();
+      end.setFullYear(end.getFullYear() + 2);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
   };
 
   const { start: timelineStart, end: timelineEnd } = getTimelineRange();
 
   // Generate date headers based on zoom level
   const getDateHeaders = () => {
-    const headers: Date[] = [];
-    // Normalize to start of day for consistent alignment
-    let current = new Date(timelineStart);
-    current.setHours(0, 0, 0, 0);
-    const end = new Date(timelineEnd);
-    end.setHours(23, 59, 59, 999);
+    try {
+      const headers: Date[] = [];
+      // Normalize to start of day for consistent alignment
+      let current = new Date(timelineStart);
+      if (isNaN(current.getTime())) {
+        console.error('Invalid timelineStart:', timelineStart);
+        return [];
+      }
+      current.setHours(0, 0, 0, 0);
+      const end = new Date(timelineEnd);
+      if (isNaN(end.getTime())) {
+        console.error('Invalid timelineEnd:', timelineEnd);
+        return [];
+      }
+      end.setHours(23, 59, 59, 999);
     
     if (zoomLevel === 1) {
       // Daily view - start from exact timeline start
@@ -246,35 +291,48 @@ const TimelineView: React.FC = () => {
     } else if (zoomLevel === 2) {
       // Weekly view - start from the Monday of the week containing timeline start
       const dayOfWeek = current.getDay();
-      const diff = current.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust to Monday
-      current.setDate(diff);
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; // Days to subtract to get to Monday
+      current.setDate(current.getDate() + daysToMonday);
       while (current <= end) {
         headers.push(new Date(current));
-        current.setDate(current.getDate() + 7);
+        const nextWeek = new Date(current);
+        nextWeek.setDate(nextWeek.getDate() + 7);
+        current = nextWeek;
       }
     } else {
       // Monthly view - start from the first day of the month containing timeline start
       current.setDate(1); // First day of the month
       while (current <= end) {
         headers.push(new Date(current));
-        current.setMonth(current.getMonth() + 1);
-        current.setDate(1); // Ensure we stay on the 1st of each month
+        const nextMonth = new Date(current);
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        nextMonth.setDate(1); // Ensure we stay on the 1st of each month
+        current = nextMonth;
       }
+      
+      return headers;
+    } catch (error) {
+      console.error('Error generating date headers:', error);
+      return [];
     }
-    
-    return headers;
   };
 
   // Calculate position in pixels for milestones (matching date header grid)
   const getMilestonePosition = (milestone: typeof milestones[0]) => {
-    const start = parseLocalDate(milestone.startDate);
-    const end = parseLocalDate(milestone.endDate);
-    
-    // Get the date headers to find which header index the milestone falls into
-    const dateHeaders = getDateHeaders();
-    if (dateHeaders.length === 0) {
-      return { left: '0px', width: '60px' };
-    }
+    try {
+      const start = parseLocalDate(milestone.startDate);
+      const end = parseLocalDate(milestone.endDate);
+      
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        console.error('Invalid milestone dates:', milestone);
+        return { left: '0px', width: '60px' };
+      }
+      
+      // Get the date headers to find which header index the milestone falls into
+      const dateHeaders = getDateHeaders();
+      if (dateHeaders.length === 0) {
+        return { left: '0px', width: '60px' };
+      }
     
     // Normalize dates to start of day for consistent calculation
     const startDate = new Date(start);
@@ -393,22 +451,30 @@ const TimelineView: React.FC = () => {
     
     const duration = Math.max(1, endIndex - startIndex + 1);
     
-    // Calculate position in pixels based on header index
-    const left = startIndex * dayWidth;
-    const width = duration * dayWidth;
-    
-    return { left: `${left}px`, width: `${Math.max(width, 60)}px` };
+      // Calculate position in pixels based on header index
+      const left = startIndex * dayWidth;
+      const width = duration * dayWidth;
+      
+      return { left: `${left}px`, width: `${Math.max(width, 60)}px` };
+    } catch (error) {
+      console.error('Error calculating milestone position:', error, milestone);
+      return { left: '0px', width: '60px' };
+    }
   };
 
   // Get today's position in pixels
   const getTodayPosition = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (today < timelineStart || today > timelineEnd) return null;
-    
-    // Get the date headers to find which header index today falls into
-    const dateHeaders = getDateHeaders();
-    if (dateHeaders.length === 0) return null;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (isNaN(today.getTime()) || isNaN(timelineStart.getTime()) || isNaN(timelineEnd.getTime())) {
+        return null;
+      }
+      if (today < timelineStart || today > timelineEnd) return null;
+      
+      // Get the date headers to find which header index today falls into
+      const dateHeaders = getDateHeaders();
+      if (dateHeaders.length === 0) return null;
     
     let dayWidth: number;
     let todayIndex: number;
@@ -466,13 +532,17 @@ const TimelineView: React.FC = () => {
       }
     }
     
-    if (todayIndex === -1 || todayIndex < 0 || todayIndex >= dateHeaders.length) return null;
-    
-    const position = todayIndex * dayWidth;
-    return `${position}px`;
+      if (todayIndex === -1 || todayIndex < 0 || todayIndex >= dateHeaders.length) return null;
+      
+      const position = todayIndex * dayWidth;
+      return `${position}px`;
+    } catch (error) {
+      console.error('Error calculating today position:', error);
+      return null;
+    }
   };
 
-  const dateHeaders = getDateHeaders();
+  const dateHeaders = getDateHeaders() || [];
   const todayPosition = getTodayPosition();
 
   return (
@@ -936,12 +1006,13 @@ const TimelineView: React.FC = () => {
                         {/* Label column to match milestone rows */}
                         <div className="w-32 border-r border-gray-200 bg-white flex-shrink-0"></div>
                         <div className="flex flex-1">
-                          {dateHeaders.map((date, index) => {
+                          {dateHeaders && dateHeaders.length > 0 ? dateHeaders.map((date, index) => {
+                            if (!date || isNaN(date.getTime())) return null;
                             const isToday = date.toDateString() === new Date().toDateString();
                             return (
                               <div
                                 key={index}
-                                className={`border-r border-gray-200 p-2 text-center flex-shrink-0 ${isToday ? 'bg-blue-50' : ''}`}
+                                className={`border-r border-gray-200 dark:border-gray-700 p-2 text-center flex-shrink-0 ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                                 style={{ width: `${dayWidth}px` }}
                               >
                                 {zoomLevel === 1 ? (
@@ -977,7 +1048,11 @@ const TimelineView: React.FC = () => {
                                 )}
                               </div>
                             );
-                          })}
+                          }).filter(Boolean) : (
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                              No date headers available
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
