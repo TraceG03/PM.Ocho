@@ -409,7 +409,7 @@ const TimelineView: React.FC = () => {
     
     if (zoomLevel === 1) {
       // Daily view - find the exact day header index
-      dayWidth = 80;
+      dayWidth = 50;
       startIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -440,7 +440,7 @@ const TimelineView: React.FC = () => {
       }
     } else if (zoomLevel === 2) {
       // Weekly view - find which week header the date falls into
-      dayWidth = 120;
+      dayWidth = 70;
       startIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -475,7 +475,7 @@ const TimelineView: React.FC = () => {
       }
     } else {
       // Monthly view - find which month header the date falls into
-      dayWidth = 150;
+      dayWidth = 90;
       startIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -544,7 +544,7 @@ const TimelineView: React.FC = () => {
     
     if (zoomLevel === 1) {
       // Daily view - find exact day
-      dayWidth = 80;
+      dayWidth = 50;
       todayIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -560,7 +560,7 @@ const TimelineView: React.FC = () => {
       }
     } else if (zoomLevel === 2) {
       // Weekly view - find which week today falls into
-      dayWidth = 120;
+      dayWidth = 70;
       todayIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -578,7 +578,7 @@ const TimelineView: React.FC = () => {
       }
     } else {
       // Monthly view - find which month today falls into
-      dayWidth = 150;
+      dayWidth = 90;
       todayIndex = dateHeaders.findIndex(header => {
         const headerDate = new Date(header);
         headerDate.setHours(0, 0, 0, 0);
@@ -616,7 +616,7 @@ const TimelineView: React.FC = () => {
       const milestone = milestones.find(m => m.id === draggingMilestone);
       if (!milestone) return;
 
-      const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+      const dayWidth = zoomLevel === 1 ? 50 : zoomLevel === 2 ? 70 : 90;
       const deltaX = e.clientX - dragStartX;
       const deltaDays = Math.round(deltaX / dayWidth);
 
@@ -1138,7 +1138,7 @@ const TimelineView: React.FC = () => {
             <div className="overflow-x-auto overflow-y-auto bg-white dark:bg-gray-800" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 200px)', minHeight: '600px' }}>
               {(() => {
                 const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
-                const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+                const dayWidth = zoomLevel === 1 ? 50 : zoomLevel === 2 ? 70 : 90;
                 const timelineWidth = totalDays * dayWidth;
                 
                 return (
@@ -1236,7 +1236,7 @@ const TimelineView: React.FC = () => {
                         
                         if (clickX < 0) return;
                         
-                        const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+                        const dayWidth = zoomLevel === 1 ? 50 : zoomLevel === 2 ? 70 : 90;
                         const headerIndex = Math.floor(clickX / dayWidth);
                         
                         if (headerIndex >= 0 && headerIndex < dateHeaders.length) {
