@@ -1,23 +1,22 @@
 /** @type {import('tailwindcss').Config} */
-module.exports = {
+export default {
   content: [
-    "./App.{js,jsx,ts,tsx}",
-    "./src/**/*.{js,jsx,ts,tsx}",
-    "./components/**/*.{js,jsx,ts,tsx}"
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
   ],
-  presets: [require("nativewind/preset")],
+  darkMode: 'class',
   theme: {
     extend: {
       colors: {
         primary: "#3b82f6",
+        'accent-purple': "#7c3aed",
         accent: {
           green: "#10b981",
           purple: "#7c3aed",
           indigo: "#6366f1"
         }
       }
-    }
+    },
   },
-  plugins: []
+  plugins: [],
 }
-

@@ -16,7 +16,8 @@
     "lucide-react": "^0.344.0",
     "openai": "^6.9.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.1",
