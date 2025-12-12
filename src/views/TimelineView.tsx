@@ -291,8 +291,7 @@ const TimelineView: React.FC = () => {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
     
-    // Add padding (at least 30 days, or extend to 2 years from latest milestone)
-    start.setDate(start.getDate() - 30);
+    // Start exactly on the first milestone date (no padding)
     
     // Ensure timeline extends at least 2 years from the latest milestone
     const twoYearsFromLatest = new Date(end);
