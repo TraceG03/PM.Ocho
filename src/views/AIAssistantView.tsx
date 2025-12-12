@@ -431,24 +431,26 @@ const AIAssistantView: React.FC = () => {
     
     try {
       // Log the response for debugging
-      console.log('AI Response:', responseText);
+      console.log('=== Parsing AI Response for Milestones ===');
+      console.log('Full response:', responseText);
+      console.log('Response length:', responseText.length);
       
-      // Try to find single milestone JSON (more flexible pattern)
+      // Strategy 1: Try to find single milestone JSON with action
       const singleMatch = responseText.match(/\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
       if (singleMatch) {
         try {
           const parsed = JSON.parse(singleMatch[0]);
           if (parsed.action === 'add_milestone' && parsed.milestone) {
             milestones.push(parsed.milestone);
-            console.log('Found single milestone:', parsed.milestone);
+            console.log('✓ Found single milestone (with action):', parsed.milestone);
             return milestones;
           }
         } catch (e) {
-          console.error('Error parsing single milestone JSON:', e, singleMatch[0]);
+          console.error('✗ Error parsing single milestone JSON:', e);
         }
       }
       
-      // Try to find multiple milestones JSON array (more flexible)
+      // Strategy 2: Try to find multiple milestones JSON array with action
       const arrayMatch = responseText.match(/\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\]/);
       if (arrayMatch) {
         try {
@@ -460,16 +462,16 @@ const AIAssistantView: React.FC = () => {
               }
             });
             if (milestones.length > 0) {
-              console.log('Found multiple milestones:', milestones.length);
+              console.log('✓ Found multiple milestones (with action):', milestones.length);
               return milestones;
             }
           }
         } catch (e) {
-          console.error('Error parsing array milestone JSON:', e, arrayMatch[0]);
+          console.error('✗ Error parsing array milestone JSON:', e);
         }
       }
       
-      // Try code blocks with more flexible patterns
+      // Strategy 3: Try code blocks with JSON
       const codeBlockPatterns = [
         /```(?:json)?\s*(\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\})\s*```/,
         /```(?:json)?\s*(\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\])\s*```/,
@@ -483,16 +485,19 @@ const AIAssistantView: React.FC = () => {
             const parsed = JSON.parse(match[1]);
             if (parsed.action === 'add_milestone' && parsed.milestone) {
               milestones.push(parsed.milestone);
-              console.log('Found milestone in code block:', parsed.milestone);
+              console.log('✓ Found milestone in code block:', parsed.milestone);
               return milestones;
             } else if (Array.isArray(parsed)) {
               parsed.forEach((item: any) => {
                 if (item.action === 'add_milestone' && item.milestone) {
                   milestones.push(item.milestone);
+                } else if (item.title && item.startDate && item.endDate) {
+                  // Direct milestone in array
+                  milestones.push(item);
                 }
               });
               if (milestones.length > 0) {
-                console.log('Found milestones in code block array:', milestones.length);
+                console.log('✓ Found milestones in code block array:', milestones.length);
                 return milestones;
               }
             }
@@ -504,20 +509,99 @@ const AIAssistantView: React.FC = () => {
                 const parsed = JSON.parse(jsonMatch[0]);
                 if (parsed.action === 'add_milestone' && parsed.milestone) {
                   milestones.push(parsed.milestone);
+                  console.log('✓ Found milestone in nested JSON:', parsed.milestone);
                   return milestones;
+                } else if (Array.isArray(parsed)) {
+                  parsed.forEach((item: any) => {
+                    if (item.action === 'add_milestone' && item.milestone) {
+                      milestones.push(item.milestone);
+                    } else if (item.title && item.startDate && item.endDate) {
+                      milestones.push(item);
+                    }
+                  });
+                  if (milestones.length > 0) {
+                    console.log('✓ Found milestones in nested JSON array:', milestones.length);
+                    return milestones;
+                  }
                 }
               } catch (e2) {
-                console.error('Error parsing JSON from code block:', e2);
+                console.error('✗ Error parsing JSON from code block:', e2);
               }
             }
           }
         }
       }
+      
+      // Strategy 4: Try to find any JSON object or array that might contain milestone data (more flexible)
+      const jsonPatterns = [
+        /\{[\s\S]*?"title"[\s\S]*?"startDate"[\s\S]*?"endDate"[\s\S]*?\}/,  // Direct milestone object
+        /\[[\s\S]*?\{[\s\S]*?"title"[\s\S]*?"startDate"[\s\S]*?"endDate"[\s\S]*?\}[\s\S]*?\]/  // Array of milestone objects
+      ];
+      
+      for (const pattern of jsonPatterns) {
+        const match = responseText.match(pattern);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[0]);
+            if (parsed.title && parsed.startDate && parsed.endDate) {
+              // Direct milestone object
+              milestones.push(parsed);
+              console.log('✓ Found direct milestone object:', parsed);
+              return milestones;
+            } else if (Array.isArray(parsed)) {
+              // Array of milestone objects
+              parsed.forEach((item: any) => {
+                if (item.title && item.startDate && item.endDate) {
+                  milestones.push(item);
+                } else if (item.milestone && item.milestone.title && item.milestone.startDate && item.milestone.endDate) {
+                  milestones.push(item.milestone);
+                }
+              });
+              if (milestones.length > 0) {
+                console.log('✓ Found milestones in direct array:', milestones.length);
+                return milestones;
+              }
+            }
+          } catch (e) {
+            console.error('✗ Error parsing direct milestone JSON:', e);
+          }
+        }
+      }
+      
+      // Strategy 5: Try to extract JSON from anywhere in the text (last resort)
+      // Look for JSON-like structures that might be embedded in text
+      const embeddedJsonPattern = /(\[[\s\S]{20,}?\]|\{[\s\S]{20,}?\})/;
+      const embeddedMatch = responseText.match(embeddedJsonPattern);
+      if (embeddedMatch) {
+        try {
+          const parsed = JSON.parse(embeddedMatch[1]);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item: any) => {
+              if (item.milestone && item.milestone.title && item.milestone.startDate && item.milestone.endDate) {
+                milestones.push(item.milestone);
+              } else if (item.title && item.startDate && item.endDate) {
+                milestones.push(item);
+              }
+            });
+            if (milestones.length > 0) {
+              console.log('✓ Found milestones in embedded JSON:', milestones.length);
+              return milestones;
+            }
+          } else if (parsed.milestone && parsed.milestone.title && parsed.milestone.startDate && parsed.milestone.endDate) {
+            milestones.push(parsed.milestone);
+            console.log('✓ Found milestone in embedded JSON object:', parsed.milestone);
+            return milestones;
+          }
+        } catch (e) {
+          console.error('✗ Error parsing embedded JSON:', e);
+        }
+      }
+      
     } catch (error) {
-      console.error('Error parsing milestones from response:', error);
+      console.error('✗ Error in parseMilestonesFromResponse:', error);
     }
     
-    console.log('No milestones found in response');
+    console.log('✗ No milestones found in response after trying all strategies');
     return milestones;
   };
 
@@ -596,22 +680,27 @@ You also have access to the user's project data, which includes:
 
 When the user asks about their project, reference this data. When they ask general questions, answer naturally without forcing project context.
 
-IMPORTANT: You can EXTRACT AND ADD MILESTONES to the timeline automatically! 
+CRITICAL: You MUST extract and add milestones when you detect milestone information in the user's text!
 
-When the user provides text content that contains milestone information (dates, deadlines, tasks, schedules, project phases), AUTOMATICALLY extract and add them to the timeline. You should do this proactively - if you detect milestone information in the text, extract it even if the user doesn't explicitly ask.
+When the user provides ANY text that contains dates, deadlines, tasks, schedules, or project information, you MUST:
+1. IMMEDIATELY extract all milestone information
+2. Return the milestones in JSON format (see below)
+3. Do this automatically - don't wait for the user to ask
 
-Look for patterns like:
-- Dates with task/milestone names
-- Schedules or timelines
-- Project phases with deadlines
+Look for ANY of these patterns:
+- Dates (any format: "January 15", "2025-01-15", "1/15/2025", "next week", "in 2 months")
+- Task/milestone names with dates
+- Schedules, timelines, or project plans
+- Deadlines or due dates
+- Project phases with dates
 - Task lists with dates
-- "Start date", "End date", "Due date", "Deadline"
-- Relative dates like "next week", "in 2 months" paired with tasks
+- Relative dates ("next week", "in 2 months", "tomorrow") paired with tasks
 
-When you detect milestone information in text:
-1. Analyze the content for milestone information (tasks, deadlines, dates, project phases)
-2. Extract ALL milestones you find with their titles, start dates, end dates, and any notes
-3. Automatically respond with a JSON array in this format (for multiple milestones):
+When you detect milestone information:
+1. Extract ALL milestones with titles, start dates, end dates, and notes
+2. Convert relative dates to actual dates (e.g., "next week" → actual date)
+3. ALWAYS include the JSON in your response, even if you also provide a text explanation
+4. Use this EXACT format (for multiple milestones):
 [
   {
     "action": "add_milestone",
@@ -647,19 +736,19 @@ When extracting milestones:
 
 Be conversational, helpful, and natural. Answer questions directly and thoroughly. When project data is relevant, use it. When it's not, just answer the question normally.`;
 
-        // Detect if the query contains milestone/schedule information
-        const containsMilestoneInfo = currentQuery.toLowerCase().match(/\b(date|deadline|schedule|timeline|milestone|task|phase|start|end|due|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|next week|in \d+ (days?|weeks?|months?))\b/);
+        // Detect if the query contains milestone/schedule information (more comprehensive pattern)
+        const containsMilestoneInfo = currentQuery.toLowerCase().match(/\b(date|deadline|schedule|timeline|milestone|task|phase|start|end|due|january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|\d{1,2}-\d{1,2}-\d{4}|next week|in \d+ (days?|weeks?|months?)|tomorrow|today|project|plan|timeline)\b/);
         
-        // Include project data if query is project-related OR contains milestone info
+        // Always include project data if milestone info is detected
         const isProjectRelated = currentQuery.toLowerCase().match(/\b(milestone|task|phase|project|timeline|document|photo|schedule|deadline|construction|site)\b/) || containsMilestoneInfo;
         const projectDataMessage = isProjectRelated 
           ? { role: 'system' as const, content: `Here is the user's project data (use this when relevant):\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` }
           : null;
         
-        // Enhance the user query if it contains milestone info but doesn't explicitly ask for extraction
+        // Enhance the user query to strongly prompt milestone extraction
         let enhancedQuery = currentQuery;
-        if (containsMilestoneInfo && !currentQuery.toLowerCase().includes('extract') && !currentQuery.toLowerCase().includes('add milestone') && !currentQuery.toLowerCase().includes('create milestone')) {
-          enhancedQuery = `${currentQuery}\n\n[Note: If this text contains milestone, task, or schedule information with dates, please automatically extract and add them to the timeline using the JSON format specified above.]`;
+        if (containsMilestoneInfo) {
+          enhancedQuery = `${currentQuery}\n\n[IMPORTANT: The text above contains milestone/schedule information. You MUST extract all milestones and return them in JSON format with "action": "add_milestone". Include the JSON in your response even if you also provide a text explanation.]`;
         }
 
         const messagesToSend = [
@@ -680,6 +769,55 @@ Be conversational, helpful, and natural. Answer questions directly and thoroughl
         });
 
         response = completion.choices[0]?.message?.content || 'I apologize, but I encountered an error generating a response.';
+        
+        // If milestone info was detected but no JSON found, try to prompt extraction again
+        if (containsMilestoneInfo) {
+          const initialExtracted = parseMilestonesFromResponse(response);
+          if (initialExtracted.length === 0) {
+            // AI didn't return JSON, try asking more directly
+            console.log('Milestone info detected but no JSON found, prompting again...');
+            const extractionPrompt = `The previous text contains milestone information. Please extract all milestones and return them as JSON. Use this EXACT format:
+[
+  {
+    "action": "add_milestone",
+    "milestone": {
+      "title": "Milestone Name",
+      "startDate": "YYYY-MM-DD",
+      "endDate": "YYYY-MM-DD",
+      "phaseId": "${phases.length > 0 ? phases[0].id : ''}",
+      "notes": ""
+    }
+  }
+]
+
+Original text: ${currentQuery}`;
+            
+            try {
+              const extractionCompletion = await openai.chat.completions.create({
+                model: 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'system', content: `Here is the user's project data:\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` },
+                  { role: 'user', content: extractionPrompt }
+                ],
+                temperature: 0.3, // Lower temperature for more structured output
+                max_tokens: 2000,
+              });
+              
+              const extractionResponse = extractionCompletion.choices[0]?.message?.content || '';
+              const extractedFromRetry = parseMilestonesFromResponse(extractionResponse);
+              if (extractedFromRetry.length > 0) {
+                // Use the extracted milestones from retry
+                response = extractionResponse;
+                console.log('Successfully extracted milestones on retry:', extractedFromRetry.length);
+              } else {
+                console.log('Retry also failed to extract milestones');
+              }
+            } catch (retryError) {
+              console.error('Error in milestone extraction retry:', retryError);
+            }
+          }
+        }
         
         // Check if AI wants to add milestones (single or multiple)
         const extractedMilestones = parseMilestonesFromResponse(response);
