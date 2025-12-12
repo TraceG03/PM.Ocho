@@ -1108,32 +1108,34 @@ const TimelineView: React.FC = () => {
       ) : (
         /* Asana-style Timeline View */
         <div className="px-4 mt-4">
-          <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
-            {/* Timeline Controls */}
-            <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
+            {/* Timeline Controls - Asana Style */}
+            <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => setZoomLevel(prev => Math.max(1, prev - 1))}
                   disabled={zoomLevel === 1}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Zoom out"
                 >
-                  <ZoomOut size={18} className="text-gray-600" />
+                  <ZoomOut size={16} className="text-gray-600 dark:text-gray-400" />
                 </button>
-                <span className="text-sm text-gray-600 min-w-[80px] text-center">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300 min-w-[60px] text-center px-2">
                   {zoomLevel === 1 ? 'Days' : zoomLevel === 2 ? 'Weeks' : 'Months'}
                 </span>
                 <button
                   onClick={() => setZoomLevel(prev => Math.min(3, prev + 1))}
                   disabled={zoomLevel === 3}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="p-1.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  title="Zoom in"
                 >
-                  <ZoomIn size={18} className="text-gray-600" />
+                  <ZoomIn size={16} className="text-gray-600 dark:text-gray-400" />
                 </button>
               </div>
             </div>
 
             {/* Timeline Container */}
-            <div className="overflow-x-auto overflow-y-auto" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 200px)', minHeight: '800px' }}>
+            <div className="overflow-x-auto overflow-y-auto bg-white dark:bg-gray-800" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 200px)', minHeight: '600px' }}>
               {(() => {
                 const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
                 const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
@@ -1141,11 +1143,11 @@ const TimelineView: React.FC = () => {
                 
                 return (
                   <div style={{ width: `${timelineWidth}px`, minWidth: '100%' }}>
-                    {/* Date Headers */}
-                    <div className="sticky top-0 bg-white border-b-2 border-gray-300 z-20">
+                    {/* Date Headers - Asana Style */}
+                    <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600 z-20 shadow-sm">
                       <div className="flex">
-                        {/* Label column to match milestone rows */}
-                        <div className="w-32 border-r border-gray-200 bg-white flex-shrink-0"></div>
+                        {/* Label column */}
+                        <div className="w-40 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex-shrink-0 h-12"></div>
                         <div className="flex flex-1">
                           {dateHeaders && dateHeaders.length > 0 ? dateHeaders.map((date, index) => {
                             if (!date || isNaN(date.getTime())) return null;
@@ -1166,40 +1168,43 @@ const TimelineView: React.FC = () => {
                                     setShowAddMilestone(true);
                                   }
                                 }}
-                                className={`date-header-cell border-r border-gray-200 dark:border-gray-700 p-2 text-center flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                                style={{ width: `${dayWidth}px` }}
+                                className={`date-header-cell border-r border-gray-200 dark:border-gray-700 px-2 py-2 text-center flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-900/20 border-l-2 border-l-blue-500' : ''}`}
+                                style={{ width: `${dayWidth}px`, minHeight: '48px' }}
                                 title="Click to add milestone"
                               >
                                 {zoomLevel === 1 ? (
-                                  <>
-                                    <div className={`text-base font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                                      {date.getDate()}
-                                    </div>
-                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                  <div className="flex flex-col items-center">
+                                    <div className={`text-xs font-medium uppercase tracking-wide ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
                                       {date.toLocaleDateString('en-US', { weekday: 'short' })}
                                     </div>
-                                    <div className="text-xs text-gray-500">
+                                    <div className={`text-base font-semibold mt-0.5 ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
+                                      {date.getDate()}
+                                    </div>
+                                    <div className={`text-xs ${isToday ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                       {date.toLocaleDateString('en-US', { month: 'short' })}
                                     </div>
-                                  </>
+                                  </div>
                                 ) : zoomLevel === 2 ? (
-                                  <>
-                                    <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
+                                  <div className="flex flex-col items-center">
+                                    <div className={`text-xs font-medium uppercase tracking-wide ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                      Week of
+                                    </div>
+                                    <div className={`text-sm font-semibold mt-0.5 ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
                                       {date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                                     </div>
-                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                    <div className={`text-xs ${isToday ? 'text-blue-500 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500'}`}>
                                       {date.getFullYear()}
                                     </div>
-                                  </>
+                                  </div>
                                 ) : (
-                                  <>
-                                    <div className={`text-sm font-bold ${isToday ? 'text-blue-600' : 'text-gray-900'}`}>
-                                      {date.toLocaleDateString('en-US', { month: 'short' })}
+                                  <div className="flex flex-col items-center">
+                                    <div className={`text-xs font-medium uppercase tracking-wide ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                                      {date.toLocaleDateString('en-US', { month: 'long' })}
                                     </div>
-                                    <div className={`text-xs ${isToday ? 'text-blue-500' : 'text-gray-600'} mt-0.5`}>
+                                    <div className={`text-sm font-semibold mt-0.5 ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-gray-900 dark:text-white'}`}>
                                       {date.getFullYear()}
                                     </div>
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             );
@@ -1212,24 +1217,22 @@ const TimelineView: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Timeline Rows */}
+                    {/* Timeline Rows - Asana Style */}
                     <div 
-                      className="relative cursor-pointer" 
-                      style={{ minHeight: `${Math.max(sortedMilestones.length * 80 + 20, 800)}px` }}
+                      className="relative" 
+                      style={{ minHeight: `${Math.max(sortedMilestones.length * 60 + 20, 600)}px` }}
                       onClick={(e) => {
-                        // Only handle clicks on the timeline area itself, not on milestones
                         if ((e.target as HTMLElement).closest('.milestone-bar') || 
                             (e.target as HTMLElement).closest('.milestone-label') ||
                             (e.target as HTMLElement).closest('.date-header-cell')) {
                           return;
                         }
                         
-                        // Calculate which date was clicked based on X position
                         const timelineContainer = (e.currentTarget as HTMLElement).closest('.overflow-x-auto');
                         if (!timelineContainer) return;
                         
                         const rect = timelineContainer.getBoundingClientRect();
-                        const clickX = e.clientX - rect.left - 128; // Subtract label column width
+                        const clickX = e.clientX - rect.left - 160; // Subtract label column width (w-40 = 160px)
                         
                         if (clickX < 0) return;
                         
@@ -1252,57 +1255,54 @@ const TimelineView: React.FC = () => {
                         }
                       }}
                     >
-                      {/* Today Indicator Line */}
+                      {/* Today Indicator Line - Asana Style */}
                       {todayPosition && (
                         <div
-                          className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
-                          style={{ left: `calc(${todayPosition} + 8rem)` }}
+                          className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10 pointer-events-none"
+                          style={{ left: `calc(${todayPosition} + 10rem)` }}
                         >
-                          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-xs px-2 py-0.5 rounded">
+                          <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white text-[10px] font-medium px-1.5 py-0.5 rounded shadow-sm">
                             Today
                           </div>
                         </div>
                       )}
 
-                      {/* Milestone Bars */}
-                      {sortedMilestones.map((milestone) => {
+                      {/* Milestone Bars - Asana Style */}
+                      {sortedMilestones.map((milestone, index) => {
                         const position = getMilestonePosition(milestone);
                         const isDragging = draggingMilestone === milestone.id;
-                        const isResizingLeft = resizingMilestone === 'left' && draggingMilestone === milestone.id;
-                        const isResizingRight = resizingMilestone === 'right' && draggingMilestone === milestone.id;
+                        const phaseColor = getPhaseColor(milestone.phaseId);
                         
                         return (
                           <div
                             key={milestone.id}
-                            className="relative border-b border-gray-100 milestone-row"
-                            style={{ height: '100px' }}
+                            className="relative border-b border-gray-100 dark:border-gray-700/50 milestone-row hover:bg-gray-50/50 dark:hover:bg-gray-700/20 transition-colors"
+                            style={{ height: '60px' }}
                           >
-                            {/* Milestone Label */}
-                            <div className="milestone-label absolute left-0 top-0 bottom-0 w-32 bg-white border-r border-gray-200 flex items-center px-3 z-10">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {/* Milestone Label - Asana Style */}
+                            <div className="milestone-label absolute left-0 top-0 bottom-0 w-40 bg-gray-50 dark:bg-gray-900/50 border-r border-gray-200 dark:border-gray-700 flex items-center px-3 z-10 sticky left-0">
+                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                 <div
-                                  className="w-3 h-3 rounded flex-shrink-0"
-                                  style={{ backgroundColor: getPhaseColor(milestone.phaseId) }}
+                                  className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm"
+                                  style={{ backgroundColor: phaseColor }}
                                 />
-                                <span className="text-sm font-medium text-gray-900 truncate" title={milestone.title}>
+                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={milestone.title}>
                                   {milestone.title}
                                 </span>
                               </div>
                             </div>
 
-                            {/* Milestone Bar */}
-                            <div className="ml-32 relative h-full milestone-bar" style={{ width: `calc(100% - 8rem)` }}>
+                            {/* Milestone Bar - Asana Style */}
+                            <div className="ml-40 relative h-full milestone-bar" style={{ width: `calc(100% - 10rem)` }}>
                               <div
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  // Don't open modal if clicking on resize handles
                                   if (!(e.target as HTMLElement).closest('.resize-handle')) {
                                     setSelectedMilestone(milestone.id);
                                   }
                                 }}
                                 onMouseDown={(e) => {
                                   e.stopPropagation();
-                                  // Only start drag if clicking on the bar itself, not resize handles
                                   if (!(e.target as HTMLElement).closest('.resize-handle')) {
                                     setDraggingMilestone(milestone.id);
                                     setDragStartX(e.clientX);
@@ -1311,18 +1311,19 @@ const TimelineView: React.FC = () => {
                                     e.preventDefault();
                                   }
                                 }}
-                                className={`milestone-bar absolute top-1/2 transform -translate-y-1/2 h-10 rounded-lg flex items-center px-3 text-white text-sm font-medium shadow-sm cursor-move hover:opacity-90 hover:shadow-md transition-all ${isDragging ? 'opacity-80 z-50' : ''}`}
+                                className={`milestone-bar absolute top-1/2 transform -translate-y-1/2 h-8 rounded-md flex items-center px-2.5 text-white text-xs font-medium shadow-md cursor-move hover:shadow-lg hover:scale-[1.02] transition-all ${isDragging ? 'opacity-70 z-50 scale-105' : 'opacity-100'}`}
                                 style={{
-                                  backgroundColor: getPhaseColor(milestone.phaseId),
+                                  backgroundColor: phaseColor,
                                   left: position.left,
                                   width: position.width,
-                                  minWidth: '60px'
+                                  minWidth: '40px',
+                                  boxShadow: `0 2px 4px rgba(0,0,0,0.1), 0 0 0 1px rgba(0,0,0,0.05)`
                                 }}
                                 title={`${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()}) - Drag to move, drag edges to resize`}
                               >
                                 {/* Left resize handle */}
                                 <div
-                                  className="resize-handle absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white hover:bg-opacity-30 rounded-l-lg"
+                                  className="resize-handle absolute left-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 rounded-l-md transition-colors"
                                   onMouseDown={(e) => {
                                     e.stopPropagation();
                                     setResizingMilestone('left');
@@ -1333,11 +1334,11 @@ const TimelineView: React.FC = () => {
                                   title="Drag to resize start date"
                                 />
                                 
-                                <span className="truncate flex-1 text-center">{milestone.title}</span>
+                                <span className="truncate flex-1 text-center px-1 font-medium">{milestone.title}</span>
                                 
                                 {/* Right resize handle */}
                                 <div
-                                  className="resize-handle absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white hover:bg-opacity-30 rounded-r-lg"
+                                  className="resize-handle absolute right-0 top-0 bottom-0 w-3 cursor-ew-resize hover:bg-white/20 rounded-r-md transition-colors"
                                   onMouseDown={(e) => {
                                     e.stopPropagation();
                                     setResizingMilestone('right');
@@ -1353,10 +1354,12 @@ const TimelineView: React.FC = () => {
                         );
                       })}
 
-                      {/* Empty State */}
+                      {/* Empty State - Asana Style */}
                       {sortedMilestones.length === 0 && (
-                        <div className="flex items-center justify-center h-40 text-gray-400">
-                          <p>No milestones yet. Add milestones to see them on the timeline.</p>
+                        <div className="flex flex-col items-center justify-center h-64 text-gray-400 dark:text-gray-500">
+                          <Calendar size={48} className="mb-3 opacity-50" />
+                          <p className="text-sm font-medium">No milestones yet</p>
+                          <p className="text-xs mt-1">Click on the timeline or add a milestone to get started</p>
                         </div>
                       )}
                     </div>
@@ -1365,18 +1368,18 @@ const TimelineView: React.FC = () => {
               })()}
             </div>
 
-            {/* Legend */}
+            {/* Legend - Asana Style */}
             {phases.length > 0 && (
-              <div className="p-4 border-t border-gray-200">
-                <p className="text-xs font-medium text-gray-500 mb-2">Legend:</p>
-                <div className="flex flex-wrap gap-3">
+              <div className="px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Legend:</span>
                   {phases.map(phase => (
                     <div key={phase.id} className="flex items-center gap-2">
                       <div
-                        className="w-3 h-3 rounded"
+                        className="w-3 h-3 rounded-full shadow-sm"
                         style={{ backgroundColor: phase.color }}
                       />
-                      <span className="text-xs text-gray-600">{phase.name}</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">{phase.name}</span>
                     </div>
                   ))}
                 </div>

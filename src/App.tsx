@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppProvider } from './context/AppContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -10,7 +10,18 @@ import DailyReportsView from './views/DailyReportsView';
 import AIAssistantView from './views/AIAssistantView';
 
 function App() {
-  const [currentView, setCurrentView] = useState('timeline');
+  // Initialize from localStorage or default to 'timeline'
+  const [currentView, setCurrentView] = useState(() => {
+    const savedView = localStorage.getItem('currentView');
+    return (savedView && ['timeline', 'tasks', 'plans', 'photos', 'ai'].includes(savedView)) 
+      ? savedView 
+      : 'timeline';
+  });
+
+  // Save to localStorage whenever currentView changes
+  useEffect(() => {
+    localStorage.setItem('currentView', currentView);
+  }, [currentView]);
 
   const renderView = () => {
     switch (currentView) {

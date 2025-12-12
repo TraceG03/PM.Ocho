@@ -611,6 +611,46 @@ const AIAssistantView: React.FC = () => {
     return milestones.length > 0 ? milestones[0] : null;
   };
 
+  // Detect phase name from user query
+  const detectPhaseFromQuery = (query: string): { phaseName: string; phaseId: string } | null => {
+    const lowerQuery = query.toLowerCase();
+    
+    // Patterns to detect phase mentions
+    const phasePatterns = [
+      /(?:these|all|the)\s+(?:milestones?|tasks?)\s+(?:go|belong|are)\s+(?:in|to)\s+phase\s+["']?([^"'\s]+)["']?/i,
+      /phase\s+["']?([^"'\s]+)["']?\s+(?:for|contains?|has)/i,
+      /(?:in|to)\s+phase\s+["']?([^"'\s]+)["']?/i,
+      /phase\s+["']?([^"'\s]+)["']?/i,
+    ];
+    
+    for (const pattern of phasePatterns) {
+      const match = query.match(pattern);
+      if (match && match[1]) {
+        const mentionedPhaseName = match[1].trim();
+        
+        // Try to find exact match first
+        let matchedPhase = phases.find(p => 
+          p.name.toLowerCase() === mentionedPhaseName.toLowerCase()
+        );
+        
+        // If no exact match, try partial match
+        if (!matchedPhase) {
+          matchedPhase = phases.find(p => 
+            p.name.toLowerCase().includes(mentionedPhaseName.toLowerCase()) ||
+            mentionedPhaseName.toLowerCase().includes(p.name.toLowerCase())
+          );
+        }
+        
+        if (matchedPhase) {
+          console.log(`Detected phase mention: "${mentionedPhaseName}" → "${matchedPhase.name}" (ID: ${matchedPhase.id})`);
+          return { phaseName: matchedPhase.name, phaseId: matchedPhase.id };
+        }
+      }
+    }
+    
+    return null;
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
 
@@ -726,7 +766,10 @@ Or for a single milestone:
   }
 }
 
-For phaseId, use the ID of an existing phase. If the user doesn't specify a phase, use the first available phase ID, or if no phases exist, use an empty string.
+For phaseId, use the ID of an existing phase. 
+- If the user explicitly mentions a phase name (e.g., "these milestones go in phase 'wall'"), use that phase's ID for ALL milestones
+- If the user doesn't specify a phase, try to match milestone keywords to phase names semantically
+- If no match can be determined, use the first available phase ID, or if no phases exist, use an empty string
 
 When extracting milestones:
 - Look for dates, deadlines, task names, project phases
@@ -736,19 +779,25 @@ When extracting milestones:
 
 Be conversational, helpful, and natural. Answer questions directly and thoroughly. When project data is relevant, use it. When it's not, just answer the question normally.`;
 
+        // Detect if user specified a phase
+        const detectedPhase = detectPhaseFromQuery(currentQuery);
+        
         // Detect if the query contains milestone/schedule information (more comprehensive pattern)
         const containsMilestoneInfo = currentQuery.toLowerCase().match(/\b(date|deadline|schedule|timeline|milestone|task|phase|start|end|due|january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|\d{1,2}-\d{1,2}-\d{4}|next week|in \d+ (days?|weeks?|months?)|tomorrow|today|project|plan|timeline)\b/);
         
         // Always include project data if milestone info is detected
         const isProjectRelated = currentQuery.toLowerCase().match(/\b(milestone|task|phase|project|timeline|document|photo|schedule|deadline|construction|site)\b/) || containsMilestoneInfo;
         const projectDataMessage = isProjectRelated 
-          ? { role: 'system' as const, content: `Here is the user's project data (use this when relevant):\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` }
+          ? { role: 'system' as const, content: `Here is the user's project data (use this when relevant):\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}${detectedPhase ? `\n\nIMPORTANT: The user explicitly specified that milestones should go in phase "${detectedPhase.phaseName}" (ID: ${detectedPhase.phaseId}). Use this phaseId for all extracted milestones.` : ''}` }
           : null;
         
         // Enhance the user query to strongly prompt milestone extraction
         let enhancedQuery = currentQuery;
         if (containsMilestoneInfo) {
-          enhancedQuery = `${currentQuery}\n\n[IMPORTANT: The text above contains milestone/schedule information. You MUST extract all milestones and return them in JSON format with "action": "add_milestone". Include the JSON in your response even if you also provide a text explanation.]`;
+          const phaseInstruction = detectedPhase 
+            ? `\n\n[CRITICAL: The user specified that these milestones should go in phase "${detectedPhase.phaseName}" (ID: ${detectedPhase.phaseId}). Use phaseId: "${detectedPhase.phaseId}" for ALL extracted milestones.]`
+            : '';
+          enhancedQuery = `${currentQuery}${phaseInstruction}\n\n[IMPORTANT: The text above contains milestone/schedule information. You MUST extract all milestones and return them in JSON format with "action": "add_milestone". Include the JSON in your response even if you also provide a text explanation.]`;
         }
 
         const messagesToSend = [
@@ -784,22 +833,23 @@ Be conversational, helpful, and natural. Answer questions directly and thoroughl
       "title": "Milestone Name",
       "startDate": "YYYY-MM-DD",
       "endDate": "YYYY-MM-DD",
-      "phaseId": "${phases.length > 0 ? phases[0].id : ''}",
+      "phaseId": "${detectedPhase ? detectedPhase.phaseId : (phases.length > 0 ? phases[0].id : '')}",
       "notes": ""
     }
   }
 ]
+${detectedPhase ? `\nCRITICAL: The user specified that ALL milestones should go in phase "${detectedPhase.phaseName}" (ID: ${detectedPhase.phaseId}). Use this phaseId for every milestone.` : ''}
 
 Original text: ${currentQuery}`;
             
             try {
               const extractionCompletion = await openai.chat.completions.create({
                 model: 'gpt-4o-mini',
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  { role: 'system', content: `Here is the user's project data:\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` },
-                  { role: 'user', content: extractionPrompt }
-                ],
+                  messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'system', content: `Here is the user's project data:\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}${detectedPhase ? `\n\nIMPORTANT: The user explicitly specified that milestones should go in phase "${detectedPhase.phaseName}" (ID: ${detectedPhase.phaseId}). Use this phaseId for all extracted milestones.` : ''}` },
+                    { role: 'user', content: extractionPrompt }
+                  ],
                 temperature: 0.3, // Lower temperature for more structured output
                 max_tokens: 2000,
               });
