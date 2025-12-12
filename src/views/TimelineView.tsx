@@ -1133,7 +1133,7 @@ const TimelineView: React.FC = () => {
             </div>
 
             {/* Timeline Container */}
-            <div className="overflow-x-auto" ref={timelineRef}>
+            <div className="overflow-x-auto overflow-y-auto" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '600px' }}>
               {(() => {
                 const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
                 const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
@@ -1213,7 +1213,45 @@ const TimelineView: React.FC = () => {
                     </div>
 
                     {/* Timeline Rows */}
-                    <div className="relative" style={{ minHeight: `${sortedMilestones.length * 60 + 20}px` }}>
+                    <div 
+                      className="relative cursor-pointer" 
+                      style={{ minHeight: `${Math.max(sortedMilestones.length * 80 + 20, 600)}px` }}
+                      onClick={(e) => {
+                        // Only handle clicks on the timeline area itself, not on milestones
+                        if ((e.target as HTMLElement).closest('.milestone-bar') || 
+                            (e.target as HTMLElement).closest('.milestone-label') ||
+                            (e.target as HTMLElement).closest('.date-header-cell')) {
+                          return;
+                        }
+                        
+                        // Calculate which date was clicked based on X position
+                        const timelineContainer = (e.currentTarget as HTMLElement).closest('.overflow-x-auto');
+                        if (!timelineContainer) return;
+                        
+                        const rect = timelineContainer.getBoundingClientRect();
+                        const clickX = e.clientX - rect.left - 128; // Subtract label column width
+                        
+                        if (clickX < 0) return;
+                        
+                        const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+                        const headerIndex = Math.floor(clickX / dayWidth);
+                        
+                        if (headerIndex >= 0 && headerIndex < dateHeaders.length) {
+                          const clickedDate = dateHeaders[headerIndex];
+                          if (clickedDate && !isNaN(clickedDate.getTime())) {
+                            setClickedDate(new Date(clickedDate));
+                            setMilestoneForm({
+                              title: '',
+                              startDate: clickedDate.toISOString().split('T')[0],
+                              endDate: clickedDate.toISOString().split('T')[0],
+                              phaseId: phases[0]?.id || '',
+                              notes: '',
+                            });
+                            setShowAddMilestone(true);
+                          }
+                        }
+                      }}
+                    >
                       {/* Today Indicator Line */}
                       {todayPosition && (
                         <div
@@ -1236,11 +1274,11 @@ const TimelineView: React.FC = () => {
                         return (
                           <div
                             key={milestone.id}
-                            className="relative border-b border-gray-100"
-                            style={{ height: '60px' }}
+                            className="relative border-b border-gray-100 milestone-row"
+                            style={{ height: '80px' }}
                           >
                             {/* Milestone Label */}
-                            <div className="absolute left-0 top-0 bottom-0 w-32 bg-white border-r border-gray-200 flex items-center px-3 z-10">
+                            <div className="milestone-label absolute left-0 top-0 bottom-0 w-32 bg-white border-r border-gray-200 flex items-center px-3 z-10">
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <div
                                   className="w-3 h-3 rounded flex-shrink-0"
@@ -1253,15 +1291,17 @@ const TimelineView: React.FC = () => {
                             </div>
 
                             {/* Milestone Bar */}
-                            <div className="ml-32 relative h-full" style={{ width: `calc(100% - 8rem)` }}>
+                            <div className="ml-32 relative h-full milestone-bar" style={{ width: `calc(100% - 8rem)` }}>
                               <div
                                 onClick={(e) => {
+                                  e.stopPropagation();
                                   // Don't open modal if clicking on resize handles
                                   if (!(e.target as HTMLElement).closest('.resize-handle')) {
                                     setSelectedMilestone(milestone.id);
                                   }
                                 }}
                                 onMouseDown={(e) => {
+                                  e.stopPropagation();
                                   // Only start drag if clicking on the bar itself, not resize handles
                                   if (!(e.target as HTMLElement).closest('.resize-handle')) {
                                     setDraggingMilestone(milestone.id);
@@ -1271,7 +1311,7 @@ const TimelineView: React.FC = () => {
                                     e.preventDefault();
                                   }
                                 }}
-                                className={`absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-move hover:opacity-90 hover:shadow-md transition-all ${isDragging ? 'opacity-80 z-50' : ''}`}
+                                className={`milestone-bar absolute top-1/2 transform -translate-y-1/2 h-10 rounded-lg flex items-center px-3 text-white text-sm font-medium shadow-sm cursor-move hover:opacity-90 hover:shadow-md transition-all ${isDragging ? 'opacity-80 z-50' : ''}`}
                                 style={{
                                   backgroundColor: getPhaseColor(milestone.phaseId),
                                   left: position.left,

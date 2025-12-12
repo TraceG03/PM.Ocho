@@ -27,8 +27,8 @@ const AIAssistantView: React.FC = () => {
     {
       id: '1',
       text: openAIConfigured 
-        ? "Hello! I'm your AI construction site assistant powered by ChatGPT. I have full access to your project data including milestones, tasks, weekly planner, documents, photos, and phases. I can answer questions about any part of your project and help you manage your construction site. How can I help you today?"
-        : "Hello! I'm your AI construction site assistant. I have full access to your project data including milestones, tasks, weekly planner, documents, photos, and phases. I can answer questions about any part of your project and help you manage your construction site. How can I help you today?",
+        ? "Hello! I'm your AI assistant powered by GPT-4o-mini. I'm a general-purpose AI that can help you with a wide variety of tasks - from answering questions, writing, analysis, coding, and more. I also have access to your project data (milestones, tasks, documents, photos, phases) which I can reference when relevant. How can I help you today?"
+        : "Hello! I'm your AI assistant. I can help you with a wide variety of tasks. I also have access to your project data (milestones, tasks, documents, photos, phases) which I can reference when relevant. How can I help you today?",
       sender: 'assistant',
     },
   ]);
@@ -38,7 +38,7 @@ const AIAssistantView: React.FC = () => {
   const [uploadedContent, setUploadedContent] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const suggestedChips = ['Show my timeline', 'What tasks do I have?', 'Project summary', 'Extract milestones from text'];
+  const suggestedChips = ['Show my timeline', 'What tasks do I have?', 'Project summary', 'Help me write', 'Explain something'];
 
   // Build comprehensive app context for AI
   const buildAppContext = (): string => {
@@ -540,28 +540,41 @@ const AIAssistantView: React.FC = () => {
         // Build complete app context
         const appContext = buildAppContext();
 
-        const systemPrompt = `You are an AI construction site assistant with FULL ACCESS to the user's entire project data. You can see and reference:
+        const systemPrompt = `You are a helpful AI assistant powered by GPT-4o-mini. You are a general-purpose AI that can help with a wide variety of tasks including:
 
-1. TIMELINE & MILESTONES: All project milestones with dates, phases, status (completed/in progress/upcoming), and notes
-2. WEEKLY PLANNER & TASKS: All tasks organized by date, including completed/pending status, priority, category, crew assignments, and notes
+- Answering questions on any topic
+- Writing, editing, and creative tasks
+- Analysis and problem-solving
+- Coding and technical assistance
+- General conversation and advice
+- And much more!
+
+You also have access to the user's project data, which includes:
+1. TIMELINE & MILESTONES: All project milestones with dates, phases, status, and notes
+2. WEEKLY PLANNER & TASKS: All tasks organized by date, including status, priority, category, crew assignments, and notes
 3. PHASES: All project phases with names and colors
 4. DOCUMENTS: All uploaded plans, contracts, and documents with titles, types, descriptions, and content
 5. PHOTOS/REPORTS: All photos and reports with captions and dates
 6. FILES: All uploaded files
 
-You have complete visibility into:
-- What milestones are coming up
-- What tasks are pending or completed
-- What documents contain relevant information
-- Project progress and status
-- Dates, schedules, and deadlines
+When the user asks about their project, reference this data. When they ask general questions, answer naturally without forcing project context.
 
-IMPORTANT: You can EXTRACT AND ADD MILESTONES to the timeline! 
+IMPORTANT: You can EXTRACT AND ADD MILESTONES to the timeline automatically! 
 
-When the user provides text content, a URL, or asks you to extract milestones from content:
+When the user provides text content that contains milestone information (dates, deadlines, tasks, schedules, project phases), AUTOMATICALLY extract and add them to the timeline. You should do this proactively - if you detect milestone information in the text, extract it even if the user doesn't explicitly ask.
+
+Look for patterns like:
+- Dates with task/milestone names
+- Schedules or timelines
+- Project phases with deadlines
+- Task lists with dates
+- "Start date", "End date", "Due date", "Deadline"
+- Relative dates like "next week", "in 2 months" paired with tasks
+
+When you detect milestone information in text:
 1. Analyze the content for milestone information (tasks, deadlines, dates, project phases)
-2. Extract all milestones you find with their titles, start dates, end dates, and any notes
-3. Respond with a JSON array in this format (for multiple milestones):
+2. Extract ALL milestones you find with their titles, start dates, end dates, and any notes
+3. Automatically respond with a JSON array in this format (for multiple milestones):
 [
   {
     "action": "add_milestone",
@@ -595,40 +608,38 @@ When extracting milestones:
 - Extract as many milestones as you can find in the content
 - Include any relevant notes or descriptions
 
-When answering questions:
-- Reference SPECIFIC data from the project (e.g., "You have 3 milestones coming up in the next 2 weeks: Foundation Complete on Jan 15, Framing Start on Jan 20...")
-- Use actual milestone names, task names, dates, and details from the project
-- Provide insights based on the complete project data
-- Be helpful, professional, and construction-focused
-- Reference specific information from uploaded documents when available
-- Provide practical, actionable advice based on the actual project state
-- If asked about something not in the data, say so clearly
-- When adding milestones, extract dates from the user's request (e.g., "next week", "January 15", "in 2 weeks" should be converted to actual dates)
+Be conversational, helpful, and natural. Answer questions directly and thoroughly. When project data is relevant, use it. When it's not, just answer the question normally.`;
 
-You can answer questions like:
-- "What milestones do I have coming up?"
-- "Show me my tasks for this week"
-- "What's the status of my project?"
-- "What does my timeline look like?"
-- "What tasks are high priority?"
-- "What information is in my documents about [topic]?"
-- "Add a milestone for [task] on [date]"
-- "Create a milestone for [description]"
-- And any other question about the project data`;
+        // Detect if the query contains milestone/schedule information
+        const containsMilestoneInfo = currentQuery.toLowerCase().match(/\b(date|deadline|schedule|timeline|milestone|task|phase|start|end|due|january|february|march|april|may|june|july|august|september|october|november|december|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|next week|in \d+ (days?|weeks?|months?))\b/);
+        
+        // Include project data if query is project-related OR contains milestone info
+        const isProjectRelated = currentQuery.toLowerCase().match(/\b(milestone|task|phase|project|timeline|document|photo|schedule|deadline|construction|site)\b/) || containsMilestoneInfo;
+        const projectDataMessage = isProjectRelated 
+          ? { role: 'system' as const, content: `Here is the user's project data (use this when relevant):\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` }
+          : null;
+        
+        // Enhance the user query if it contains milestone info but doesn't explicitly ask for extraction
+        let enhancedQuery = currentQuery;
+        if (containsMilestoneInfo && !currentQuery.toLowerCase().includes('extract') && !currentQuery.toLowerCase().includes('add milestone') && !currentQuery.toLowerCase().includes('create milestone')) {
+          enhancedQuery = `${currentQuery}\n\n[Note: If this text contains milestone, task, or schedule information with dates, please automatically extract and add them to the timeline using the JSON format specified above.]`;
+        }
+
+        const messagesToSend = [
+          { role: 'system' as const, content: systemPrompt },
+          ...(projectDataMessage ? [projectDataMessage] : []),
+          ...messages.slice(-10).map(msg => ({
+            role: (msg.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: msg.text
+          })),
+          { role: 'user' as const, content: enhancedQuery + (documentContext ? `\n\nRelevant document context:\n${documentContext}` : '') }
+        ];
 
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'system', content: `Here is the complete project data:\n\n${appContext}\n\nAvailable phases: ${phases.map(p => `${p.name} (ID: ${p.id})`).join(', ') || 'No phases yet'}` },
-            ...messages.slice(-5).map(msg => ({
-              role: (msg.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
-              content: msg.text
-            })),
-            { role: 'user', content: currentQuery + (documentContext ? `\n\nRelevant document context:\n${documentContext}` : '') }
-          ],
+          messages: messagesToSend,
           temperature: 0.7,
-          max_tokens: 2000,
+          max_tokens: 4000,
         });
 
         response = completion.choices[0]?.message?.content || 'I apologize, but I encountered an error generating a response.';
@@ -832,7 +843,7 @@ You can answer questions like:
             </button>
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            💡 Tip: Paste text with milestone info, provide a URL, or upload a .txt/.xml file to extract milestones
+            💡 Tip: Just paste text with dates, deadlines, or schedules - I'll automatically extract milestones! Or upload a .txt/.xml file.
           </p>
         </div>
       </div>
