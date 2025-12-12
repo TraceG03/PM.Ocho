@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bot, Send, FileText, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Bot, Send, FileText, AlertCircle, Upload, Link as LinkIcon } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { openai, isOpenAIConfigured } from '../lib/openai';
 
@@ -35,8 +35,10 @@ const AIAssistantView: React.FC = () => {
   const [inputText, setInputText] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [uploadedContent, setUploadedContent] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const suggestedChips = ['Show my timeline', 'What tasks do I have?', 'Project summary'];
+  const suggestedChips = ['Show my timeline', 'What tasks do I have?', 'Project summary', 'Extract milestones from text'];
 
   // Build comprehensive app context for AI
   const buildAppContext = (): string => {
@@ -280,34 +282,237 @@ const AIAssistantView: React.FC = () => {
     return `I couldn't find specific information about "${query}" in the uploaded documents.\n\nAvailable documents: ${docList}`;
   };
 
-  // Parse AI response for milestone creation
-  const parseMilestoneFromResponse = (responseText: string): { title: string; startDate: string; endDate: string; phaseId: string; notes: string } | null => {
+  // Fetch content from URL (with CORS proxy)
+  const fetchUrlContent = async (url: string): Promise<string> => {
     try {
-      // Try to find JSON in the response
-      const jsonMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.action === 'add_milestone' && parsed.milestone) {
-          return parsed.milestone;
+      // Try direct fetch first
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          return await response.text();
+        }
+      } catch (e) {
+        // If direct fetch fails, try CORS proxy
+      }
+      
+      // Use CORS proxy
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const data = await response.json();
+      return data.contents || '';
+    } catch (error: any) {
+      throw new Error(`Failed to fetch URL: ${error.message}`);
+    }
+  };
+
+  // Parse Microsoft Project XML file
+  const parseProjectXML = (xmlContent: string): Array<{ title: string; startDate: string; endDate: string; notes: string }> => {
+    const milestones: Array<{ title: string; startDate: string; endDate: string; notes: string }> = [];
+    try {
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(xmlContent, 'text/xml');
+      
+      // Check for parse errors
+      const parseError = xmlDoc.querySelector('parsererror');
+      if (parseError) {
+        throw new Error('Invalid XML format');
+      }
+
+      // Find all tasks in the XML
+      const tasks = xmlDoc.querySelectorAll('Task');
+      tasks.forEach((task) => {
+        const name = task.querySelector('Name')?.textContent || '';
+        const start = task.querySelector('Start')?.textContent || '';
+        const finish = task.querySelector('Finish')?.textContent || '';
+        const notes = task.querySelector('Notes')?.textContent || '';
+
+        if (name && start && finish) {
+          // Convert Microsoft Project date format (if needed)
+          const startDate = new Date(start).toISOString().split('T')[0];
+          const endDate = new Date(finish).toISOString().split('T')[0];
+          
+          milestones.push({
+            title: name,
+            startDate,
+            endDate,
+            notes: notes || '',
+          });
+        }
+      });
+    } catch (error) {
+      console.error('Error parsing XML:', error);
+      throw error;
+    }
+    return milestones;
+  };
+
+  // Extract text from uploaded file
+  const extractTextFromFile = async (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      } else if (file.name.endsWith('.xml')) {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target?.result as string);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      } else {
+        reject(new Error('Unsupported file type. Please upload .txt or .xml files.'));
+      }
+    });
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (file: File) => {
+    try {
+      setIsProcessing(true);
+      setAiError(null);
+      
+      const fileContent = await extractTextFromFile(file);
+      
+      // Check if it's a Microsoft Project XML file
+      if (file.name.endsWith('.xml') && fileContent.includes('<Project')) {
+        const xmlMilestones = parseProjectXML(fileContent);
+        
+        if (xmlMilestones.length > 0) {
+          // Add all milestones from XML
+          let addedCount = 0;
+          for (const milestone of xmlMilestones) {
+            try {
+              const phaseId = phases.length > 0 ? phases[0].id : '';
+              await addMilestone({
+                title: milestone.title,
+                startDate: milestone.startDate,
+                endDate: milestone.endDate,
+                phaseId,
+                notes: milestone.notes,
+              });
+              addedCount++;
+            } catch (error) {
+              console.error('Error adding milestone:', error);
+            }
+          }
+          
+          const userMessage: Message = {
+            id: Date.now().toString(),
+            text: `Uploaded file: ${file.name}`,
+            sender: 'user',
+          };
+          setMessages(prev => [...prev, userMessage]);
+          
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            text: `✅ Successfully extracted and added ${addedCount} milestone(s) from the Microsoft Project XML file!`,
+            sender: 'assistant',
+          };
+          setMessages(prev => [...prev, assistantMessage]);
+          return;
         }
       }
       
-      // Also check for JSON code blocks
+      // For text files or if XML parsing didn't work, use AI to extract milestones
+      setUploadedContent(fileContent);
+      setInputText(`Extract milestones from this content:\n\n${fileContent.substring(0, 5000)}${fileContent.length > 5000 ? '...' : ''}`);
+      
+    } catch (error: any) {
+      setAiError(error.message || 'Failed to process file');
+      console.error('File upload error:', error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Parse AI response for milestone creation (single or multiple)
+  const parseMilestonesFromResponse = (responseText: string): Array<{ title: string; startDate: string; endDate: string; phaseId: string; notes: string }> => {
+    const milestones: Array<{ title: string; startDate: string; endDate: string; phaseId: string; notes: string }> = [];
+    
+    try {
+      // Try to find single milestone JSON
+      const singleMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
+      if (singleMatch) {
+        const parsed = JSON.parse(singleMatch[0]);
+        if (parsed.action === 'add_milestone' && parsed.milestone) {
+          milestones.push(parsed.milestone);
+          return milestones;
+        }
+      }
+      
+      // Try to find multiple milestones JSON array
+      const arrayMatch = responseText.match(/\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]/);
+      if (arrayMatch) {
+        const parsed = JSON.parse(arrayMatch[0]);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item.action === 'add_milestone' && item.milestone) {
+              milestones.push(item.milestone);
+            }
+          });
+          return milestones;
+        }
+      }
+      
+      // Try code blocks
       const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\})\s*```/);
       if (codeBlockMatch) {
         const parsed = JSON.parse(codeBlockMatch[1]);
         if (parsed.action === 'add_milestone' && parsed.milestone) {
-          return parsed.milestone;
+          milestones.push(parsed.milestone);
+          return milestones;
+        }
+      }
+      
+      // Try array in code block
+      const arrayCodeBlockMatch = responseText.match(/```(?:json)?\s*(\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\])\s*```/);
+      if (arrayCodeBlockMatch) {
+        const parsed = JSON.parse(arrayCodeBlockMatch[1]);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((item: any) => {
+            if (item.action === 'add_milestone' && item.milestone) {
+              milestones.push(item.milestone);
+            }
+          });
+          return milestones;
         }
       }
     } catch (error) {
-      console.error('Error parsing milestone from response:', error);
+      console.error('Error parsing milestones from response:', error);
     }
-    return null;
+    
+    return milestones;
+  };
+
+  // Parse AI response for milestone creation (backward compatibility)
+  const parseMilestoneFromResponse = (responseText: string): { title: string; startDate: string; endDate: string; phaseId: string; notes: string } | null => {
+    const milestones = parseMilestonesFromResponse(responseText);
+    return milestones.length > 0 ? milestones[0] : null;
   };
 
   const handleSendMessage = async () => {
     if (!inputText.trim() || isProcessing) return;
+
+    let queryText = inputText;
+    let urlContent = '';
+    
+    // Check if input contains a URL
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = queryText.match(urlRegex);
+    
+    if (urls && urls.length > 0) {
+      // Fetch content from URL
+      try {
+        setIsProcessing(true);
+        const url = urls[0];
+        urlContent = await fetchUrlContent(url);
+        queryText += `\n\nContent from ${url}:\n${urlContent.substring(0, 10000)}${urlContent.length > 10000 ? '...' : ''}`;
+      } catch (error: any) {
+        setAiError(`Failed to fetch URL: ${error.message}`);
+        setIsProcessing(false);
+        return;
+      }
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -316,14 +521,14 @@ const AIAssistantView: React.FC = () => {
     };
 
     setMessages([...messages, userMessage]);
-    const currentQuery = inputText;
+    const currentQuery = queryText;
     setInputText('');
     setIsProcessing(true);
     setAiError(null);
 
     try {
       let response = '';
-      let milestoneAdded = false;
+      let milestonesAdded = 0;
 
       if (openAIConfigured && openai) {
         // Use OpenAI ChatGPT
@@ -351,7 +556,26 @@ You have complete visibility into:
 - Project progress and status
 - Dates, schedules, and deadlines
 
-IMPORTANT: You can ADD MILESTONES to the timeline! When the user asks you to add a milestone, create one, or schedule something, respond with a JSON object in this exact format:
+IMPORTANT: You can EXTRACT AND ADD MILESTONES to the timeline! 
+
+When the user provides text content, a URL, or asks you to extract milestones from content:
+1. Analyze the content for milestone information (tasks, deadlines, dates, project phases)
+2. Extract all milestones you find with their titles, start dates, end dates, and any notes
+3. Respond with a JSON array in this format (for multiple milestones):
+[
+  {
+    "action": "add_milestone",
+    "milestone": {
+      "title": "Milestone Title",
+      "startDate": "YYYY-MM-DD",
+      "endDate": "YYYY-MM-DD",
+      "phaseId": "phase_id_here",
+      "notes": "Optional notes"
+    }
+  }
+]
+
+Or for a single milestone:
 {
   "action": "add_milestone",
   "milestone": {
@@ -359,11 +583,17 @@ IMPORTANT: You can ADD MILESTONES to the timeline! When the user asks you to add
     "startDate": "YYYY-MM-DD",
     "endDate": "YYYY-MM-DD",
     "phaseId": "phase_id_here",
-    "notes": "Optional notes about the milestone"
+    "notes": "Optional notes"
   }
 }
 
 For phaseId, use the ID of an existing phase. If the user doesn't specify a phase, use the first available phase ID, or if no phases exist, use an empty string.
+
+When extracting milestones:
+- Look for dates, deadlines, task names, project phases
+- Convert relative dates ("next week", "in 2 months") to actual dates
+- Extract as many milestones as you can find in the content
+- Include any relevant notes or descriptions
 
 When answering questions:
 - Reference SPECIFIC data from the project (e.g., "You have 3 milestones coming up in the next 2 weeks: Foundation Complete on Jan 15, Framing Start on Jan 20...")
@@ -403,39 +633,61 @@ You can answer questions like:
 
         response = completion.choices[0]?.message?.content || 'I apologize, but I encountered an error generating a response.';
         
-        // Check if AI wants to add a milestone
-        const milestoneData = parseMilestoneFromResponse(response);
-        if (milestoneData) {
+        // Check if AI wants to add milestones (single or multiple)
+        const extractedMilestones = parseMilestonesFromResponse(response);
+        if (extractedMilestones.length > 0) {
           try {
-            // Validate milestone data
-            if (!milestoneData.title || !milestoneData.startDate || !milestoneData.endDate) {
-              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
-              response += '\n\nI tried to add a milestone, but I need more information. Please provide: title, start date, and end date.';
-            } else {
-              // Use provided phaseId or default to first phase
-              let phaseId = milestoneData.phaseId;
-              if (!phaseId && phases.length > 0) {
-                phaseId = phases[0].id;
+            const validMilestones: Array<{ title: string; startDate: string; endDate: string; phaseId: string; notes: string }> = [];
+            
+            // Validate and prepare milestones
+            for (const milestoneData of extractedMilestones) {
+              if (milestoneData.title && milestoneData.startDate && milestoneData.endDate) {
+                // Use provided phaseId or default to first phase
+                let phaseId = milestoneData.phaseId;
+                if (!phaseId && phases.length > 0) {
+                  phaseId = phases[0].id;
+                }
+                
+                validMilestones.push({
+                  title: milestoneData.title,
+                  startDate: milestoneData.startDate,
+                  endDate: milestoneData.endDate,
+                  phaseId: phaseId || '',
+                  notes: milestoneData.notes || '',
+                });
+              }
+            }
+            
+            if (validMilestones.length > 0) {
+              // Add all valid milestones
+              for (const milestone of validMilestones) {
+                try {
+                  await addMilestone(milestone);
+                  milestonesAdded++;
+                } catch (error: any) {
+                  console.error('Error adding milestone:', error, milestone);
+                }
               }
               
-              await addMilestone({
-                title: milestoneData.title,
-                startDate: milestoneData.startDate,
-                endDate: milestoneData.endDate,
-                phaseId: phaseId || '',
-                notes: milestoneData.notes || '',
-              });
-              
-              milestoneAdded = true;
-              // Remove the JSON from the response and add confirmation
-              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
+              // Remove JSON from response and add confirmation
+              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+              response = response.replace(/\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]/g, '');
               response = response.replace(/```(?:json)?\s*\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}\s*```/g, '');
-              response += `\n\n✅ Successfully added milestone "${milestoneData.title}" to your timeline (${milestoneData.startDate} to ${milestoneData.endDate})!`;
+              response = response.replace(/```(?:json)?\s*\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]\s*```/g, '');
+              
+              if (milestonesAdded > 0) {
+                response += `\n\n✅ Successfully extracted and added ${milestonesAdded} milestone(s) to your timeline!`;
+              } else {
+                response += '\n\nI found milestone information but encountered errors adding them. Please check the data format.';
+              }
+            } else {
+              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+              response += '\n\nI tried to extract milestones, but I need more information. Please provide: title, start date, and end date for each milestone.';
             }
           } catch (error: any) {
-            console.error('Error adding milestone:', error);
-            response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/, '');
-            response += `\n\n❌ I encountered an error adding the milestone: ${error.message || 'Unknown error'}`;
+            console.error('Error processing milestones:', error);
+            response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+            response += `\n\n❌ I encountered an error processing the milestones: ${error.message || 'Unknown error'}`;
           }
         }
       } else {
@@ -539,8 +791,29 @@ You can answer questions like:
         <div className="px-4 py-4 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
           <div className="flex gap-2">
             <input
+              type="file"
+              ref={fileInputRef}
+              accept=".txt,.xml"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  handleFileUpload(file);
+                  e.target.value = ''; // Reset input
+                }
+              }}
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isProcessing}
+              className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 p-3 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
+              title="Upload file (.txt or .xml)"
+            >
+              <Upload size={20} />
+            </button>
+            <input
               type="text"
-              placeholder="Type your message..."
+              placeholder="Type your message or paste a URL..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -558,6 +831,9 @@ You can answer questions like:
               )}
             </button>
           </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            💡 Tip: Paste text with milestone info, provide a URL, or upload a .txt/.xml file to extract milestones
+          </p>
         </div>
       </div>
     </div>

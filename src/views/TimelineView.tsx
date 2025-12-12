@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, List, Plus, Edit, Trash2, X, ZoomIn, ZoomOut, CheckSquare, Square, ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
 import { useApp, presetColors } from '../context/AppContext';
 
 const TimelineView: React.FC = () => {
@@ -23,6 +23,13 @@ const TimelineView: React.FC = () => {
   const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<Set<string>>(new Set());
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set((phases || []).map(p => p.id))); // All phases expanded by default
+  
+  // Interactive calendar state
+  const [draggingMilestone, setDraggingMilestone] = useState<string | null>(null);
+  const [resizingMilestone, setResizingMilestone] = useState<'left' | 'right' | null>(null);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartDate, setDragStartDate] = useState<Date | null>(null);
+  const [clickedDate, setClickedDate] = useState<Date | null>(null);
 
   // Update expanded phases when phases change
   useEffect(() => {
@@ -601,6 +608,84 @@ const TimelineView: React.FC = () => {
   const dateHeaders = getDateHeaders() || [];
   const todayPosition = getTodayPosition();
 
+  // Handle mouse move for dragging/resizing
+  useEffect(() => {
+    const handleMouseMove = async (e: MouseEvent) => {
+      if (!draggingMilestone) return;
+
+      const milestone = milestones.find(m => m.id === draggingMilestone);
+      if (!milestone) return;
+
+      const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
+      const deltaX = e.clientX - dragStartX;
+      const deltaDays = Math.round(deltaX / dayWidth);
+
+      if (resizingMilestone === 'left') {
+        // Resize start date
+        const newStartDate = new Date(dragStartDate!);
+        newStartDate.setDate(newStartDate.getDate() + deltaDays);
+        
+        // Ensure start date is before end date
+        const endDate = new Date(milestone.endDate);
+        if (newStartDate >= endDate) {
+          newStartDate.setTime(endDate.getTime() - 24 * 60 * 60 * 1000); // One day before end
+        }
+        
+        // Update milestone
+        await updateMilestone(milestone.id, {
+          startDate: newStartDate.toISOString().split('T')[0],
+        });
+      } else if (resizingMilestone === 'right') {
+        // Resize end date
+        const newEndDate = new Date(dragStartDate!);
+        newEndDate.setDate(newEndDate.getDate() + deltaDays);
+        
+        // Ensure end date is after start date
+        const startDate = new Date(milestone.startDate);
+        if (newEndDate <= startDate) {
+          newEndDate.setTime(startDate.getTime() + 24 * 60 * 60 * 1000); // One day after start
+        }
+        
+        // Update milestone
+        await updateMilestone(milestone.id, {
+          endDate: newEndDate.toISOString().split('T')[0],
+        });
+      } else {
+        // Move milestone (both start and end dates)
+        const startDate = new Date(milestone.startDate);
+        const endDate = new Date(milestone.endDate);
+        const duration = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        const newStartDate = new Date(dragStartDate!);
+        newStartDate.setDate(newStartDate.getDate() + deltaDays);
+        const newEndDate = new Date(newStartDate);
+        newEndDate.setDate(newEndDate.getDate() + duration);
+        
+        // Update milestone
+        await updateMilestone(milestone.id, {
+          startDate: newStartDate.toISOString().split('T')[0],
+          endDate: newEndDate.toISOString().split('T')[0],
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setDraggingMilestone(null);
+      setResizingMilestone(null);
+      setDragStartX(0);
+      setDragStartDate(null);
+    };
+
+    if (draggingMilestone) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [draggingMilestone, resizingMilestone, dragStartX, dragStartDate, milestones, updateMilestone, zoomLevel]);
+
   return (
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
       {/* Header */}
@@ -1068,8 +1153,22 @@ const TimelineView: React.FC = () => {
                             return (
                               <div
                                 key={index}
-                                className={`border-r border-gray-200 dark:border-gray-700 p-2 text-center flex-shrink-0 ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                                onClick={(e) => {
+                                  if (e.target === e.currentTarget || (e.target as HTMLElement).closest('.date-header-cell')) {
+                                    setClickedDate(new Date(date));
+                                    setMilestoneForm({
+                                      title: '',
+                                      startDate: date.toISOString().split('T')[0],
+                                      endDate: date.toISOString().split('T')[0],
+                                      phaseId: phases[0]?.id || '',
+                                      notes: '',
+                                    });
+                                    setShowAddMilestone(true);
+                                  }
+                                }}
+                                className={`date-header-cell border-r border-gray-200 dark:border-gray-700 p-2 text-center flex-shrink-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${isToday ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                                 style={{ width: `${dayWidth}px` }}
+                                title="Click to add milestone"
                               >
                                 {zoomLevel === 1 ? (
                                   <>
@@ -1130,6 +1229,9 @@ const TimelineView: React.FC = () => {
                       {/* Milestone Bars */}
                       {sortedMilestones.map((milestone) => {
                         const position = getMilestonePosition(milestone);
+                        const isDragging = draggingMilestone === milestone.id;
+                        const isResizingLeft = resizingMilestone === 'left' && draggingMilestone === milestone.id;
+                        const isResizingRight = resizingMilestone === 'right' && draggingMilestone === milestone.id;
                         
                         return (
                           <div
@@ -1153,17 +1255,58 @@ const TimelineView: React.FC = () => {
                             {/* Milestone Bar */}
                             <div className="ml-32 relative h-full" style={{ width: `calc(100% - 8rem)` }}>
                               <div
-                                onClick={() => setSelectedMilestone(milestone.id)}
-                                className="absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-pointer hover:opacity-90 hover:shadow-md transition-all"
+                                onClick={(e) => {
+                                  // Don't open modal if clicking on resize handles
+                                  if (!(e.target as HTMLElement).closest('.resize-handle')) {
+                                    setSelectedMilestone(milestone.id);
+                                  }
+                                }}
+                                onMouseDown={(e) => {
+                                  // Only start drag if clicking on the bar itself, not resize handles
+                                  if (!(e.target as HTMLElement).closest('.resize-handle')) {
+                                    setDraggingMilestone(milestone.id);
+                                    setDragStartX(e.clientX);
+                                    setDragStartDate(new Date(milestone.startDate));
+                                    setResizingMilestone(null);
+                                    e.preventDefault();
+                                  }
+                                }}
+                                className={`absolute top-1/2 transform -translate-y-1/2 h-8 rounded-lg flex items-center px-2 text-white text-xs font-medium shadow-sm cursor-move hover:opacity-90 hover:shadow-md transition-all ${isDragging ? 'opacity-80 z-50' : ''}`}
                                 style={{
                                   backgroundColor: getPhaseColor(milestone.phaseId),
                                   left: position.left,
                                   width: position.width,
                                   minWidth: '60px'
                                 }}
-                                title={`${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()})`}
+                                title={`${milestone.title} (${new Date(milestone.startDate).toLocaleDateString()} - ${new Date(milestone.endDate).toLocaleDateString()}) - Drag to move, drag edges to resize`}
                               >
-                                <span className="truncate">{milestone.title}</span>
+                                {/* Left resize handle */}
+                                <div
+                                  className="resize-handle absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white hover:bg-opacity-30 rounded-l-lg"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setResizingMilestone('left');
+                                    setDraggingMilestone(milestone.id);
+                                    setDragStartX(e.clientX);
+                                    setDragStartDate(new Date(milestone.startDate));
+                                  }}
+                                  title="Drag to resize start date"
+                                />
+                                
+                                <span className="truncate flex-1 text-center">{milestone.title}</span>
+                                
+                                {/* Right resize handle */}
+                                <div
+                                  className="resize-handle absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white hover:bg-opacity-30 rounded-r-lg"
+                                  onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setResizingMilestone('right');
+                                    setDraggingMilestone(milestone.id);
+                                    setDragStartX(e.clientX);
+                                    setDragStartDate(new Date(milestone.endDate));
+                                  }}
+                                  title="Drag to resize end date"
+                                />
                               </div>
                             </div>
                           </div>
