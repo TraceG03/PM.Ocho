@@ -1,155 +1,106 @@
-# Construction Project Management Web Application
+# My Work App
 
-A comprehensive, mobile-first construction project management web application built with React, Tailwind CSS, and Lucide React icons.
+A comprehensive construction site management app built with Expo, React Native, and TypeScript.
 
 ## Features
 
-### 1. Timeline View
-- **List/Calendar Toggle**: Switch between list and calendar views
-- **Manage Phases**: Create, edit, and delete project phases with custom colors
-- **Add Milestones**: Create milestones with dates, phases, and notes
-- **Calendar Timeline**: Visual vertical timeline with zoom controls
-
-### 2. Daily Tasks View
-- **Quick To-Do List**: Fast task entry with checkboxes
-- **Task Management**: Full task creation with categories, priorities, crew assignments
-- **Task Grouping**: Tasks organized by date (Today, Tomorrow, etc.)
-- **Task Linking**: Link tasks to milestones or documents
-
-### 3. Plans & Contracts View
-- **Note Management**: Create notes with types (Plan Detail/Spec)
-- **File Attachments**: Visual file attachment support
-- **Quick Reference**: Grid view of all notes with quick access
-
-### 4. Photos & Reports View
-- **Photo Management**: Simulated camera and library photo capture
-- **Report Generation**: Daily and weekly report generation with email
-- **Date Selection**: Date picker for organizing photos and reports
-
-### 5. AI Assistant View
-- **AI Chat**: Interactive chat interface with suggested topics
-- **Timeline Extractor**: Extract milestones from documents using AI simulation
-- **Document Parsing**: Paste documents to automatically create milestones
+- **Timeline Management**: Track project milestones with calendar and list views
+- **Daily Tasks**: Manage daily to-dos with priority levels
+- **Plans & Contracts**: Upload and view PDFs and images with notes
+- **Photos & Reports**: Document progress with photos and AI-generated reports
+- **AI Assistant**: GPT-4o powered assistant for construction questions and milestone extraction
 
 ## Tech Stack
 
-- **React 18.3.1**: UI framework
-- **TypeScript**: Type safety
-- **Tailwind CSS 3.4.1**: Styling
-- **Lucide React**: Icon library
-- **Vite**: Build tool and dev server
-- **Vite PWA Plugin**: Progressive Web App support
-- **Context API**: State management
-- **Supabase**: Backend database and storage
-- **OpenAI**: AI-powered assistant features
+- Expo SDK 53
+- React Native 0.76.7
+- TypeScript
+- NativeWind (TailwindCSS) for styling
+- Zustand for state management
+- React Navigation for routing
+- OpenAI GPT-4o for AI features
 
-## Getting Started
+## Setup
 
-### Installation
-
+1. Install dependencies:
 ```bash
 npm install
 ```
 
-### Development
-
-```bash
-npm run dev
+2. Set up environment variables:
+Create a `.env` file in the root directory:
+```
+EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-The app will be available at `http://localhost:5173`
-
-### Build
-
+3. Start the development server:
 ```bash
-npm run build
+npm start
 ```
-
-### Preview Production Build
-
-```bash
-npm run preview
-```
-
-## Design Features
-
-- **Mobile-First**: Optimized for mobile devices
-- **iOS-like Design**: Clean, modern white theme with rounded corners
-- **Large Border Radius**: Cards use rounded-3xl (24px) for iOS-like appearance
-- **Subtle Shadows**: Soft shadows for depth
-- **Bottom Navigation**: Fixed bottom navigation bar for easy access
-- **Smooth Transitions**: Polished animations and transitions
 
 ## Project Structure
 
 ```
-src/
-├── App.tsx                 # Main app component
-├── main.tsx               # Entry point
-├── index.css              # Global styles
-├── context/
-│   └── AppContext.tsx     # State management
-├── components/
-│   └── BottomNav.tsx      # Bottom navigation bar
-└── views/
-    ├── TimelineView.tsx
-    ├── DailyTasksView.tsx
-    ├── PlansContractsView.tsx
-    ├── PhotosReportsView.tsx
-    └── AIAssistantView.tsx
+├── App.tsx                 # Main entry point
+├── src/
+│   ├── navigation/         # Navigation setup
+│   ├── screens/            # Screen components
+│   │   ├── TimelineScreen.tsx
+│   │   ├── DailyTasksScreen.tsx
+│   │   ├── PlansContractsScreen.tsx
+│   │   ├── PhotosReportsScreen.tsx
+│   │   └── AIScreen.tsx
+│   └── store/              # Zustand store
+│       └── siteManagerStore.ts
+└── package.json
 ```
 
-## State Management
+## Features in Detail
 
-The app uses React Context API for centralized state management. All data (phases, milestones, tasks, notes, photos) persists during the session and is shared across all views.
+### Timeline Screen
+- Add/edit/delete milestones
+- List and Calendar (Gantt-style) views
+- Phase management with custom colors
+- Date picker integration
 
-## Progressive Web App (PWA)
+### Daily Tasks Screen
+- Quick to-do checklist
+- Priority levels (Normal, High, Critical)
+- Link to milestones and documents
+- Date filtering
 
-This application is a Progressive Web App that can be installed on your device for a native app-like experience.
+### Plans & Contracts Screen
+- Upload PDFs and images
+- Built-in PDF viewer
+- Categorized notes with document references
 
-### PWA Features
+### Photos & Reports Screen
+- Photo documentation with captions
+- AI-powered daily/weekly report generation
+- Email reports with photo attachments
 
-- **Installable**: Add to home screen on mobile and desktop
-- **Offline Support**: Service worker caches assets for offline access
-- **App-like Experience**: Standalone display mode, no browser UI
-- **Fast Loading**: Cached resources load instantly
-- **Network Caching**: Supabase API responses are cached for better performance
+### AI Assistant Screen
+- Two modes: Chat and Timeline Extractor
+- GPT-4o powered construction assistant
+- Extract milestones from documents
+- WhatsApp integration for sharing
 
-### Setting Up PWA Icons
+## Data Persistence
 
-To complete the PWA setup, you need to generate app icons:
+All data is stored locally using AsyncStorage. No backend required.
 
-1. Open `public/pwa-icon-generator.html` in your browser
-2. Click the download buttons for each icon size
-3. Save the downloaded files to the `public` folder:
-   - `pwa-192x192.png`
-   - `pwa-512x512.png`
-   - `apple-touch-icon.png`
+## Default Phases
 
-After adding the icons, rebuild the app:
-
-```bash
-npm run build
-```
-
-### Installing the PWA
-
-**On Mobile (iOS/Android):**
-- Open the app in Safari (iOS) or Chrome (Android)
-- Tap the Share button
-- Select "Add to Home Screen"
-
-**On Desktop (Chrome/Edge):**
-- Look for the install icon in the address bar
-- Click "Install" when prompted
-
-## Browser Support
-
-- Chrome (latest) - Full PWA support
-- Firefox (latest) - Full PWA support
-- Safari (latest) - Full PWA support (iOS 11.3+)
-- Edge (latest) - Full PWA support
+1. Site Prep
+2. Foundation
+3. Masonry
+4. Roof
+5. Electrical
+6. Plumbing/PTAR
+7. Finishes
+8. Inspection
 
 ## License
 
-MIT
+Private project
+
