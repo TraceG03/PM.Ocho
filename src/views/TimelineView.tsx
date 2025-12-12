@@ -60,6 +60,7 @@ const TimelineView: React.FC = () => {
     endDate: '',
     phaseId: phases[0]?.id || '',
     notes: '',
+    completed: false,
   });
 
   const handleAddPhase = async () => {
@@ -95,6 +96,7 @@ const TimelineView: React.FC = () => {
           endDate: '',
           phaseId: phases[0]?.id || '',
           notes: '',
+          completed: false,
         });
         setShowAddMilestone(false);
       } catch (error) {
@@ -786,6 +788,15 @@ const TimelineView: React.FC = () => {
                 rows={3}
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-accent-purple resize-none"
               />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={milestoneForm.completed}
+                  onChange={(e) => setMilestoneForm({ ...milestoneForm, completed: e.target.checked })}
+                  className="w-5 h-5 rounded border-gray-300 text-accent-purple focus:ring-2 focus:ring-accent-purple"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">Mark as completed</span>
+              </label>
               <button
                 onClick={handleSaveMilestone}
                 className="w-full bg-accent-purple text-white py-3 rounded-xl font-medium shadow-sm hover:shadow-md transition-shadow"
@@ -932,7 +943,23 @@ const TimelineView: React.FC = () => {
                         style={{ borderLeftColor: phase.color }}
                       >
                         <div className="flex items-start justify-between gap-3">
-                          {/* Checkbox */}
+                          {/* Completion Checkbox */}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              await updateMilestone(milestone.id, { completed: !milestone.completed });
+                            }}
+                            className="mt-1 flex-shrink-0"
+                            title={milestone.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                          >
+                            {milestone.completed ? (
+                              <CheckSquare size={20} className="text-green-500" />
+                            ) : (
+                              <Square size={20} className="text-gray-400 dark:text-gray-500" />
+                            )}
+                          </button>
+                          
+                          {/* Selection Checkbox */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -947,8 +974,10 @@ const TimelineView: React.FC = () => {
                             )}
                           </button>
                           
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{milestone.title}</h3>
+                          <div className={`flex-1 ${milestone.completed ? 'opacity-60' : ''}`}>
+                            <h3 className={`font-semibold text-gray-900 dark:text-white mb-1 ${milestone.completed ? 'line-through' : ''}`}>
+                              {milestone.title}
+                            </h3>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                               {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
                             </p>
@@ -966,6 +995,7 @@ const TimelineView: React.FC = () => {
                                   endDate: milestone.endDate,
                                   phaseId: milestone.phaseId,
                                   notes: milestone.notes,
+                                  completed: milestone.completed,
                                 });
                                 setEditingMilestoneId(milestone.id);
                                 setShowAddMilestone(true);
@@ -1027,6 +1057,23 @@ const TimelineView: React.FC = () => {
                     style={{ borderLeftColor: '#9ca3af' }}
                   >
                     <div className="flex items-start justify-between gap-3">
+                      {/* Completion Checkbox */}
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await updateMilestone(milestone.id, { completed: !milestone.completed });
+                        }}
+                        className="mt-1 flex-shrink-0"
+                        title={milestone.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                      >
+                        {milestone.completed ? (
+                          <CheckSquare size={20} className="text-green-500" />
+                        ) : (
+                          <Square size={20} className="text-gray-400 dark:text-gray-500" />
+                        )}
+                      </button>
+                      
+                      {/* Selection Checkbox */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1041,8 +1088,10 @@ const TimelineView: React.FC = () => {
                         )}
                       </button>
                       
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1">{milestone.title}</h3>
+                      <div className={`flex-1 ${milestone.completed ? 'opacity-60' : ''}`}>
+                        <h3 className={`font-semibold text-gray-900 dark:text-white mb-1 ${milestone.completed ? 'line-through' : ''}`}>
+                          {milestone.title}
+                        </h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400">
                           {new Date(milestone.startDate).toLocaleDateString()} - {new Date(milestone.endDate).toLocaleDateString()}
                         </p>
@@ -1060,6 +1109,7 @@ const TimelineView: React.FC = () => {
                               endDate: milestone.endDate,
                               phaseId: milestone.phaseId,
                               notes: milestone.notes,
+                              completed: milestone.completed,
                             });
                             setEditingMilestoneId(milestone.id);
                             setShowAddMilestone(true);
@@ -1163,6 +1213,7 @@ const TimelineView: React.FC = () => {
                                       endDate: date.toISOString().split('T')[0],
                                       phaseId: phases[0]?.id || '',
                                       notes: '',
+                                      completed: false,
                                     });
                                     setShowAddMilestone(true);
                                   }
@@ -1248,6 +1299,7 @@ const TimelineView: React.FC = () => {
                               endDate: clickedDate.toISOString().split('T')[0],
                               phaseId: phases[0]?.id || '',
                               notes: '',
+                              completed: false,
                             });
                             setShowAddMilestone(true);
                           }
@@ -1280,12 +1332,27 @@ const TimelineView: React.FC = () => {
                           >
                             {/* Milestone Label - Asana Style */}
                             <div className="milestone-label absolute left-0 top-0 bottom-0 w-40 bg-gray-50 dark:bg-gray-900/50 border-r border-gray-200 dark:border-gray-700 flex items-center px-3 z-10 sticky left-0">
-                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                {/* Completion Checkbox */}
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    await updateMilestone(milestone.id, { completed: !milestone.completed });
+                                  }}
+                                  className="flex-shrink-0"
+                                  title={milestone.completed ? 'Mark as incomplete' : 'Mark as complete'}
+                                >
+                                  {milestone.completed ? (
+                                    <CheckSquare size={16} className="text-green-500" />
+                                  ) : (
+                                    <Square size={16} className="text-gray-400 dark:text-gray-500" />
+                                  )}
+                                </button>
                                 <div
                                   className="w-2.5 h-2.5 rounded-full flex-shrink-0 shadow-sm"
                                   style={{ backgroundColor: phaseColor }}
                                 />
-                                <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate" title={milestone.title}>
+                                <span className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${milestone.completed ? 'line-through opacity-60' : ''}`} title={milestone.title}>
                                   {milestone.title}
                                 </span>
                               </div>
@@ -1310,7 +1377,7 @@ const TimelineView: React.FC = () => {
                                     e.preventDefault();
                                   }
                                 }}
-                                className={`milestone-bar absolute top-1/2 transform -translate-y-1/2 h-8 rounded-md flex items-center px-2.5 text-white text-xs font-medium shadow-md cursor-move hover:shadow-lg hover:scale-[1.02] transition-all ${isDragging ? 'opacity-70 z-50 scale-105' : 'opacity-100'}`}
+                                className={`milestone-bar absolute top-1/2 transform -translate-y-1/2 h-8 rounded-md flex items-center px-2.5 text-white text-xs font-medium shadow-md cursor-move hover:shadow-lg hover:scale-[1.02] transition-all ${isDragging ? 'opacity-70 z-50 scale-105' : milestone.completed ? 'opacity-50' : 'opacity-100'}`}
                                 style={{
                                   backgroundColor: phaseColor,
                                   left: position.left,
@@ -1464,6 +1531,7 @@ const TimelineView: React.FC = () => {
                         endDate: milestone.endDate,
                         phaseId: milestone.phaseId,
                         notes: milestone.notes,
+                        completed: milestone.completed,
                       });
                       setEditingMilestoneId(milestone.id);
                       setSelectedMilestone(null);

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS milestones (
     end_date TEXT NOT NULL,
     phase_id TEXT NOT NULL REFERENCES phases(id) ON DELETE CASCADE,
     notes TEXT,
+    completed BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -105,9 +106,9 @@ INSERT INTO phases (id, name, color) VALUES
     ('2', 'Wall Construction', '#3B82F6')
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO milestones (id, title, start_date, end_date, phase_id, notes) VALUES
-    ('1', 'Foundation Complete', '2024-01-15', '2024-02-15', '1', 'Foundation work completed successfully'),
-    ('2', 'Frame Walls', '2024-02-16', '2024-03-30', '2', 'Wall framing in progress')
+INSERT INTO milestones (id, title, start_date, end_date, phase_id, notes, completed) VALUES
+    ('1', 'Foundation Complete', '2024-01-15', '2024-02-15', '1', 'Foundation work completed successfully', FALSE),
+    ('2', 'Frame Walls', '2024-02-16', '2024-03-30', '2', 'Wall framing in progress', FALSE)
 ON CONFLICT (id) DO NOTHING;
 
 

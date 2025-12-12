@@ -15,6 +15,7 @@ export interface Milestone {
   endDate: string;
   phaseId: string;
   notes: string;
+  completed: boolean;
 }
 
 export interface Task {
@@ -123,6 +124,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           endDate: m.end_date,
           phaseId: m.phase_id,
           notes: m.notes || '',
+          completed: m.completed || false,
         })));
       }
 
@@ -219,8 +221,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       end_date: milestone.endDate,
       phase_id: milestone.phaseId,
       notes: milestone.notes || '',
+      completed: milestone.completed || false,
     });
-    setMilestones(prev => [...prev, { ...milestone, id }]);
+    setMilestones(prev => [...prev, { ...milestone, id, completed: milestone.completed || false }]);
   };
 
   const updateMilestone = async (id: string, updatedMilestone: Partial<Milestone>) => {
@@ -230,6 +233,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (updatedMilestone.endDate !== undefined) updateData.end_date = updatedMilestone.endDate;
     if (updatedMilestone.phaseId !== undefined) updateData.phase_id = updatedMilestone.phaseId;
     if (updatedMilestone.notes !== undefined) updateData.notes = updatedMilestone.notes;
+    if (updatedMilestone.completed !== undefined) updateData.completed = updatedMilestone.completed;
     
     await supabase.from('milestones').update(updateData).eq('id', id);
     setMilestones(prev => prev.map(m => {
@@ -240,6 +244,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           startDate: updatedMilestone.startDate ?? m.startDate,
           endDate: updatedMilestone.endDate ?? m.endDate,
           phaseId: updatedMilestone.phaseId ?? m.phaseId,
+          completed: updatedMilestone.completed ?? m.completed,
         };
       }
       return m;
