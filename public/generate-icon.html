@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Icon Generator - Ocho Construction</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f0f0f0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .preview {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin: 20px 0;
+    }
+    .icon-preview {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .icon-preview h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      color: #666;
+    }
+    canvas {
+      border: 1px solid #ddd;
+      display: block;
+    }
+    button {
+      background: #000;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ocho Construction - Icon Generator</h1>
+    <p>Click the buttons below to download icons in different sizes.</p>
+    
+    <div class="preview" id="preview"></div>
+    
+    <div>
+      <button onclick="downloadIcon(192)">Download 192x192</button>
+      <button onclick="downloadIcon(512)">Download 512x512</button>
+      <button onclick="downloadIcon(180)">Download 180x180 (Apple)</button>
+      <button onclick="downloadIcon(48)">Download 48x48 (Favicon)</button>
+    </div>
+  </div>
+
+  <script>
+    function drawIcon(canvas, size) {
+      const ctx = canvas.getContext('2d');
+      
+      // Black background
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, size, size);
+      
+      // White text
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Calculate font sizes based on canvas size
+      const mainFontSize = size * 0.1875; // 96px for 512, scales proportionally
+      const subFontSize = size * 0.125; // 64px for 512, scales proportionally
+      const letterSpacing = size * 0.0078; // 4px for 512
+      const subLetterSpacing = size * 0.0156; // 8px for 512
+      
+      // Use a clean, minimalistic font
+      ctx.font = `300 ${mainFontSize}px system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif`;
+      
+      // Draw "ocho" text
+      const ochoY = size * 0.39; // ~200px for 512
+      ctx.fillText('ocho', size / 2, ochoY);
+      
+      // Draw "construction" text (lighter weight, smaller)
+      ctx.font = `200 ${subFontSize}px system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif`;
+      ctx.globalAlpha = 0.9;
+      const constructionY = size * 0.547; // ~280px for 512
+      ctx.fillText('construction', size / 2, constructionY);
+      ctx.globalAlpha = 1.0;
+      
+      // Note: Letter spacing in canvas requires manual positioning
+      // For simplicity, we're using the default spacing which looks good
+    }
+    
+    function createPreview(size, label) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      drawIcon(canvas, size);
+      
+      const preview = document.createElement('div');
+      preview.className = 'icon-preview';
+      
+      const title = document.createElement('h3');
+      title.textContent = label;
+      preview.appendChild(title);
+      preview.appendChild(canvas);
+      
+      return preview;
+    }
+    
+    function downloadIcon(size) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      drawIcon(canvas, size);
+      
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `icon-${size}x${size}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+    }
+    
+    // Create previews on load
+    window.addEventListener('load', function() {
+      const preview = document.getElementById('preview');
+      preview.appendChild(createPreview(192, '192x192 (Android)'));
+      preview.appendChild(createPreview(512, '512x512 (Android)'));
+      preview.appendChild(createPreview(180, '180x180 (Apple)'));
+      preview.appendChild(createPreview(48, '48x48 (Favicon)'));
+    });
+  </script>
+</body>
+</html>
+
