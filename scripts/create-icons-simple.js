@@ -1,0 +1,162 @@
+// Simple icon generator - creates icons using SVG to PNG conversion
+// This creates a simple HTML file that will generate icons when opened
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const iconHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate PWA Icons</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 { margin-top: 0; }
+    button {
+      background: #000;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 10px 5px;
+    }
+    button:hover { background: #333; }
+    .status { margin-top: 20px; padding: 10px; background: #e8f5e9; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Generate PWA Icons</h1>
+    <p>Click the buttons below to generate and download the required icon files.</p>
+    <p><strong>Important:</strong> Save all downloaded files to the <code>public/</code> folder in your project.</p>
+    
+    <div>
+      <button onclick="generateAndDownload(192, 'icon-192x192.png')">Generate 192x192</button>
+      <button onclick="generateAndDownload(512, 'icon-512x512.png')">Generate 512x512</button>
+      <button onclick="generateAndDownload(180, 'apple-touch-icon.png')">Generate 180x180 (Apple)</button>
+      <button onclick="generateAndDownload(48, 'favicon.png')">Generate 48x48 (Favicon)</button>
+    </div>
+    
+    <div>
+      <button onclick="generateAll()" style="background: #22c55e; margin-top: 20px;">Generate All Icons</button>
+    </div>
+    
+    <div id="status" class="status" style="display: none;"></div>
+  </div>
+
+  <script>
+    function generateIcon(size) {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      
+      // Black background
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, size, size);
+      
+      // White text
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Calculate font sizes based on canvas size
+      const mainFontSize = size * 0.1875; // 96px for 512, scales proportionally
+      const subFontSize = size * 0.125; // 64px for 512, scales proportionally
+      
+      // Use a clean, minimalistic font
+      ctx.font = \`300 \${mainFontSize}px system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif\`;
+      
+      // Draw "ocho" text
+      const ochoY = size * 0.39; // ~200px for 512
+      ctx.fillText('ocho', size / 2, ochoY);
+      
+      // Draw "construction" text (lighter weight, smaller)
+      ctx.font = \`200 \${subFontSize}px system-ui, -apple-system, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif\`;
+      ctx.globalAlpha = 0.9;
+      const constructionY = size * 0.547; // ~280px for 512
+      ctx.fillText('construction', size / 2, constructionY);
+      ctx.globalAlpha = 1.0;
+      
+      return canvas;
+    }
+    
+    function generateAndDownload(size, filename) {
+      const canvas = generateIcon(size);
+      canvas.toBlob(function(blob) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        const status = document.getElementById('status');
+        status.style.display = 'block';
+        status.textContent = \`✓ Generated and downloaded \${filename}\`;
+        status.style.background = '#e8f5e9';
+      }, 'image/png');
+    }
+    
+    function generateAll() {
+      const icons = [
+        { size: 192, name: 'icon-192x192.png' },
+        { size: 512, name: 'icon-512x512.png' },
+        { size: 180, name: 'apple-touch-icon.png' },
+        { size: 48, name: 'favicon.png' }
+      ];
+      
+      icons.forEach((icon, index) => {
+        setTimeout(() => {
+          generateAndDownload(icon.size, icon.name);
+        }, index * 500);
+      });
+      
+      setTimeout(() => {
+        const status = document.getElementById('status');
+        status.style.display = 'block';
+        status.textContent = '✓ All icons generated! Please save them to the public/ folder.';
+        status.style.background = '#e8f5e9';
+      }, icons.length * 500 + 500);
+    }
+    
+    // Auto-generate on load (optional - comment out if you prefer manual)
+    // window.addEventListener('load', () => {
+    //   setTimeout(generateAll, 1000);
+    // });
+  </script>
+</body>
+</html>`;
+
+const publicDir = path.join(__dirname, '../public');
+const outputPath = path.join(publicDir, 'generate-icons.html');
+
+fs.writeFileSync(outputPath, iconHTML);
+console.log('✓ Created icon generator at: public/generate-icons.html');
+console.log('\nTo generate icons:');
+console.log('1. Open public/generate-icons.html in your browser');
+console.log('2. Click "Generate All Icons" button');
+console.log('3. Save all downloaded files to the public/ folder');
+console.log('4. The icons will be automatically used by your PWA');
+
