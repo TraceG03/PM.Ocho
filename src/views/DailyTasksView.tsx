@@ -308,9 +308,25 @@ const DailyTasksView: React.FC = () => {
           return (
             <div key={formatDate(day)} className="bg-white dark:bg-gray-800 rounded-3xl shadow-sm overflow-hidden">
               {/* Day Header */}
-              <div className={`px-4 py-3 border-b ${
-                isTodayDate ? 'bg-accent-purple/10 dark:bg-accent-purple/20 border-accent-purple' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700'
-              }`}>
+              <div 
+                onClick={() => {
+                  const dayDateStr = formatDate(day);
+                  setSelectedDate(dayDateStr);
+                  setShowDateRange(false);
+                  setSelectedEndDate(null);
+                  // Focus the input field
+                  setTimeout(() => {
+                    const input = document.querySelector('input[placeholder="Add a task..."]') as HTMLInputElement;
+                    if (input) {
+                      input.focus();
+                    }
+                  }, 100);
+                }}
+                className={`px-4 py-3 border-b cursor-pointer hover:bg-opacity-80 transition-colors ${
+                  isTodayDate ? 'bg-accent-purple/10 dark:bg-accent-purple/20 border-accent-purple' : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-700'
+                }`}
+                title="Click to add a task for this day"
+              >
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className={`font-semibold ${isTodayDate ? 'text-accent-purple' : 'text-gray-900 dark:text-white'}`}>
@@ -321,14 +337,34 @@ const DailyTasksView: React.FC = () => {
                       {isTodayDate && <span className="ml-2 text-accent-purple font-medium">• Today</span>}
                     </p>
                   </div>
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {dayTasks.length} {dayTasks.length === 1 ? 'task' : 'tasks'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {dayTasks.length} {dayTasks.length === 1 ? 'task' : 'tasks'}
+                    </span>
+                    <Plus size={16} className="text-gray-400 dark:text-gray-500" />
+                  </div>
                 </div>
               </div>
 
               {/* Tasks List */}
-              <div className="p-4 space-y-2">
+              <div 
+                className="p-4 space-y-2 min-h-[60px]"
+                onClick={(e) => {
+                  // Only trigger if clicking on empty space, not on tasks
+                  if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('empty-day-clickable')) {
+                    const dayDateStr = formatDate(day);
+                    setSelectedDate(dayDateStr);
+                    setShowDateRange(false);
+                    setSelectedEndDate(null);
+                    setTimeout(() => {
+                      const input = document.querySelector('input[placeholder="Add a task..."]') as HTMLInputElement;
+                      if (input) {
+                        input.focus();
+                      }
+                    }, 100);
+                  }
+                }}
+              >
                 {dayTasks.length > 0 ? (
                   dayTasks.map((task) => {
                     const isMultiDay = task.endDate && task.endDate !== task.date;
@@ -409,8 +445,8 @@ const DailyTasksView: React.FC = () => {
                     );
                   })
                 ) : (
-                  <div className="text-center py-6 text-gray-400 dark:text-gray-500">
-                    <p className="text-sm">No tasks for this day</p>
+                  <div className="text-center py-6 text-gray-400 dark:text-gray-500 empty-day-clickable cursor-pointer hover:text-accent-purple transition-colors">
+                    <p className="text-sm">Click to add a task</p>
                   </div>
                 )}
               </div>

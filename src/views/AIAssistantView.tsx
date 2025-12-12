@@ -430,57 +430,94 @@ const AIAssistantView: React.FC = () => {
     const milestones: Array<{ title: string; startDate: string; endDate: string; phaseId: string; notes: string }> = [];
     
     try {
-      // Try to find single milestone JSON
-      const singleMatch = responseText.match(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
+      // Log the response for debugging
+      console.log('AI Response:', responseText);
+      
+      // Try to find single milestone JSON (more flexible pattern)
+      const singleMatch = responseText.match(/\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}/);
       if (singleMatch) {
-        const parsed = JSON.parse(singleMatch[0]);
-        if (parsed.action === 'add_milestone' && parsed.milestone) {
-          milestones.push(parsed.milestone);
-          return milestones;
+        try {
+          const parsed = JSON.parse(singleMatch[0]);
+          if (parsed.action === 'add_milestone' && parsed.milestone) {
+            milestones.push(parsed.milestone);
+            console.log('Found single milestone:', parsed.milestone);
+            return milestones;
+          }
+        } catch (e) {
+          console.error('Error parsing single milestone JSON:', e, singleMatch[0]);
         }
       }
       
-      // Try to find multiple milestones JSON array
-      const arrayMatch = responseText.match(/\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]/);
+      // Try to find multiple milestones JSON array (more flexible)
+      const arrayMatch = responseText.match(/\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\]/);
       if (arrayMatch) {
-        const parsed = JSON.parse(arrayMatch[0]);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((item: any) => {
-            if (item.action === 'add_milestone' && item.milestone) {
-              milestones.push(item.milestone);
+        try {
+          const parsed = JSON.parse(arrayMatch[0]);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item: any) => {
+              if (item.action === 'add_milestone' && item.milestone) {
+                milestones.push(item.milestone);
+              }
+            });
+            if (milestones.length > 0) {
+              console.log('Found multiple milestones:', milestones.length);
+              return milestones;
             }
-          });
-          return milestones;
+          }
+        } catch (e) {
+          console.error('Error parsing array milestone JSON:', e, arrayMatch[0]);
         }
       }
       
-      // Try code blocks
-      const codeBlockMatch = responseText.match(/```(?:json)?\s*(\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\})\s*```/);
-      if (codeBlockMatch) {
-        const parsed = JSON.parse(codeBlockMatch[1]);
-        if (parsed.action === 'add_milestone' && parsed.milestone) {
-          milestones.push(parsed.milestone);
-          return milestones;
-        }
-      }
+      // Try code blocks with more flexible patterns
+      const codeBlockPatterns = [
+        /```(?:json)?\s*(\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\})\s*```/,
+        /```(?:json)?\s*(\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\])\s*```/,
+        /```json\s*([\s\S]*?)\s*```/  // More general JSON code block
+      ];
       
-      // Try array in code block
-      const arrayCodeBlockMatch = responseText.match(/```(?:json)?\s*(\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\])\s*```/);
-      if (arrayCodeBlockMatch) {
-        const parsed = JSON.parse(arrayCodeBlockMatch[1]);
-        if (Array.isArray(parsed)) {
-          parsed.forEach((item: any) => {
-            if (item.action === 'add_milestone' && item.milestone) {
-              milestones.push(item.milestone);
+      for (const pattern of codeBlockPatterns) {
+        const match = responseText.match(pattern);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            if (parsed.action === 'add_milestone' && parsed.milestone) {
+              milestones.push(parsed.milestone);
+              console.log('Found milestone in code block:', parsed.milestone);
+              return milestones;
+            } else if (Array.isArray(parsed)) {
+              parsed.forEach((item: any) => {
+                if (item.action === 'add_milestone' && item.milestone) {
+                  milestones.push(item.milestone);
+                }
+              });
+              if (milestones.length > 0) {
+                console.log('Found milestones in code block array:', milestones.length);
+                return milestones;
+              }
             }
-          });
-          return milestones;
+          } catch (e) {
+            // Try to extract JSON from the code block more carefully
+            const jsonMatch = match[1].match(/\{[\s\S]*?\}|\[[\s\S]*?\]/);
+            if (jsonMatch) {
+              try {
+                const parsed = JSON.parse(jsonMatch[0]);
+                if (parsed.action === 'add_milestone' && parsed.milestone) {
+                  milestones.push(parsed.milestone);
+                  return milestones;
+                }
+              } catch (e2) {
+                console.error('Error parsing JSON from code block:', e2);
+              }
+            }
+          }
         }
       }
     } catch (error) {
       console.error('Error parsing milestones from response:', error);
     }
     
+    console.log('No milestones found in response');
     return milestones;
   };
 
@@ -646,12 +683,15 @@ Be conversational, helpful, and natural. Answer questions directly and thoroughl
         
         // Check if AI wants to add milestones (single or multiple)
         const extractedMilestones = parseMilestonesFromResponse(response);
+        console.log('Extracted milestones:', extractedMilestones.length, extractedMilestones);
+
         if (extractedMilestones.length > 0) {
           try {
             const validMilestones: Array<{ title: string; startDate: string; endDate: string; phaseId: string; notes: string }> = [];
             
             // Validate and prepare milestones
             for (const milestoneData of extractedMilestones) {
+              console.log('Processing milestone:', milestoneData);
               if (milestoneData.title && milestoneData.startDate && milestoneData.endDate) {
                 // Use provided phaseId or default to first phase
                 let phaseId = milestoneData.phaseId;
@@ -666,6 +706,8 @@ Be conversational, helpful, and natural. Answer questions directly and thoroughl
                   phaseId: phaseId || '',
                   notes: milestoneData.notes || '',
                 });
+              } else {
+                console.warn('Invalid milestone data (missing required fields):', milestoneData);
               }
             }
             
@@ -673,33 +715,40 @@ Be conversational, helpful, and natural. Answer questions directly and thoroughl
               // Add all valid milestones
               for (const milestone of validMilestones) {
                 try {
+                  console.log('Adding milestone:', milestone);
                   await addMilestone(milestone);
                   milestonesAdded++;
+                  console.log('Successfully added milestone:', milestone.title);
                 } catch (error: any) {
                   console.error('Error adding milestone:', error, milestone);
+                  // Show error to user
+                  response += `\n\n⚠️ Error adding milestone "${milestone.title}": ${error.message || 'Unknown error'}`;
                 }
               }
               
               // Remove JSON from response and add confirmation
-              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
-              response = response.replace(/\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]/g, '');
-              response = response.replace(/```(?:json)?\s*\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}\s*```/g, '');
-              response = response.replace(/```(?:json)?\s*\[[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\]\s*```/g, '');
+              response = response.replace(/\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+              response = response.replace(/\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\]/g, '');
+              response = response.replace(/```(?:json)?\s*\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}\s*```/g, '');
+              response = response.replace(/```(?:json)?\s*\[[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\]\s*```/g, '');
               
               if (milestonesAdded > 0) {
                 response += `\n\n✅ Successfully extracted and added ${milestonesAdded} milestone(s) to your timeline!`;
               } else {
-                response += '\n\nI found milestone information but encountered errors adding them. Please check the data format.';
+                response += '\n\n⚠️ I found milestone information but encountered errors adding them. Please check the browser console for details.';
               }
             } else {
-              response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
-              response += '\n\nI tried to extract milestones, but I need more information. Please provide: title, start date, and end date for each milestone.';
+              console.warn('No valid milestones after validation');
+              response = response.replace(/\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+              response += '\n\n⚠️ I tried to extract milestones, but the data format was invalid. Please ensure the text contains: title, start date, and end date for each milestone.';
             }
           } catch (error: any) {
             console.error('Error processing milestones:', error);
-            response = response.replace(/\{[\s\S]*"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
-            response += `\n\n❌ I encountered an error processing the milestones: ${error.message || 'Unknown error'}`;
+            response = response.replace(/\{[\s\S]*?"action"\s*:\s*"add_milestone"[\s\S]*?\}/g, '');
+            response += `\n\n❌ I encountered an error processing the milestones: ${error.message || 'Unknown error'}. Check the browser console for details.`;
           }
+        } else {
+          console.log('No milestones detected in AI response');
         }
       } else {
         // Fallback to rule-based

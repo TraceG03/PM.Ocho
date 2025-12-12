@@ -690,7 +690,7 @@ const TimelineView: React.FC = () => {
     <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 ${selectedMilestoneIds.size > 0 ? 'pb-24' : 'pb-20'}`}>
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="px-4 py-4">
+        <div className="px-4 py-2">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Timeline</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Project phases and milestones</p>
         </div>
@@ -1133,7 +1133,7 @@ const TimelineView: React.FC = () => {
             </div>
 
             {/* Timeline Container */}
-            <div className="overflow-x-auto overflow-y-auto" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '600px' }}>
+            <div className="overflow-x-auto overflow-y-auto" ref={timelineRef} style={{ maxHeight: 'calc(100vh - 200px)', minHeight: '800px' }}>
               {(() => {
                 const totalDays = Math.ceil((timelineEnd.getTime() - timelineStart.getTime()) / (1000 * 60 * 60 * 24));
                 const dayWidth = zoomLevel === 1 ? 80 : zoomLevel === 2 ? 120 : 150;
@@ -1215,7 +1215,7 @@ const TimelineView: React.FC = () => {
                     {/* Timeline Rows */}
                     <div 
                       className="relative cursor-pointer" 
-                      style={{ minHeight: `${Math.max(sortedMilestones.length * 80 + 20, 600)}px` }}
+                      style={{ minHeight: `${Math.max(sortedMilestones.length * 80 + 20, 800)}px` }}
                       onClick={(e) => {
                         // Only handle clicks on the timeline area itself, not on milestones
                         if ((e.target as HTMLElement).closest('.milestone-bar') || 
@@ -1275,7 +1275,7 @@ const TimelineView: React.FC = () => {
                           <div
                             key={milestone.id}
                             className="relative border-b border-gray-100 milestone-row"
-                            style={{ height: '80px' }}
+                            style={{ height: '100px' }}
                           >
                             {/* Milestone Label */}
                             <div className="milestone-label absolute left-0 top-0 bottom-0 w-32 bg-white border-r border-gray-200 flex items-center px-3 z-10">
